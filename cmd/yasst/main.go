@@ -5,7 +5,7 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	"github.com/AlexanderRichey/stat/internal/builder"
+	"github.com/AlexanderRichey/yasst/internal/builder"
 )
 
 func main() {
@@ -13,6 +13,7 @@ func main() {
 	flag.StringVar(&c.TemplatesDir, "templates", "templates", "templates directory, relative to current working directory")
 	flag.StringVar(&c.PagesDir, "pages", "pages", "pages directory, relative to current working directory")
 	flag.StringVar(&c.PostsDir, "posts", "posts", "posts directory, relative to current working directory")
+	flag.StringVar(&c.PublicDir, "public", "public", "public directory, relative to current working directory")
 	flag.StringVarP(&c.OutputDir, "output", "o", "build", "output directory, relative to current working directory")
 	flag.BoolVar(&c.RSS, "rss", true, "create rss.xml from posts")
 	flag.Parse()

@@ -1,21 +1,48 @@
-# sst
+# yasst
 
-SST is short for static site. It compiles Jinja2 formatted templates, markdown, and HTML into a directory that can be served statically.
+`yasst` is short for yet another static site.
 
 ```
+# Take a directory tree like this one.
+$ tree
 .
 ├── pages
-│   ├── index.html
-│   └── about.md
+│   ├── 404.html.tpl
+│   ├── about.md
+│   └── index.html.tpl
 ├── posts
-│   └── first-post.html
+│   └── first-post.md
 ├── public
-│   ├── my-picture.jpg
-│   ├── manifest.xml
-│   └── favicon.ico
+│   ├── scripts.js
+│   ├── styles.css
+│   └── my-image.jpg
 └── templates
-    ├── header.html.tpl
-    ├── footer.html.tpl
-    ├── base.html.tpl
+    ├── base.html.tpl
+    ├── page.html.tpl
     └── post.html.tpl
+
+# Run yasst.
+$ yasst --output ./static
+==> Processing "public/scripts.js" --> DONE
+==> Processing "public/styles.css" --> DONE
+==> Processing "public/my-image.jpg" --> DONE
+==> Processing "posts/first-post.md" --> DONE
+==> Processing "pages/404.html.tpl" --> DONE
+==> Processing "pages/about.md" --> DONE
+==> Processing "pages/index.html.tpl" --> DONE
+Processed 7 files in 4.15023ms
+
+# Here's the result. Note that files in public were automatically minified and hashed.
+$ tree static
+static/
+├── index.html
+├── about.html
+├── 404.html
+├── rss.xml
+├── posts
+│   └── first-post.html
+├── scripts-78hdyfuis.min.js
+├── styles-gyhuij9.min.js
+└── my-image.jpg
+
 ```

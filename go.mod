@@ -1,4 +1,4 @@
-module github.com/AlexanderRichey/stat
+module github.com/AlexanderRichey/yasst
 
 go 1.15
 
