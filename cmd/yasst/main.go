@@ -16,6 +16,7 @@ func main() {
 	flag.StringVar(&c.PublicDir, "public", "public", "public directory, relative to current working directory")
 	flag.StringVarP(&c.OutputDir, "output", "o", "build", "output directory, relative to current working directory")
 	flag.BoolVar(&c.RSS, "rss", true, "create rss.xml from posts")
+	flag.StringSliceVar(&c.HashExts, "hash-exts", []string{".js", ".css"}, "hash public files with these extensions such that output files include hashes in their names")
 	flag.Parse()
 
 	log.SetFlags(0)

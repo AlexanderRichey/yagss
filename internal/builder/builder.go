@@ -2,9 +2,11 @@ package builder
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +24,7 @@ type Config struct {
 	PublicDir    string
 	OutputDir    string
 	RSS          bool
+	HashExts     []string
 }
 
 type Builder interface {
@@ -52,6 +55,7 @@ type publicAsset struct {
 	name         string
 	originalPath string
 	path         string
+	md5          string
 }
 
 var (
@@ -139,7 +143,7 @@ func (b *builderImpl) Build() error {
 
 func (b *builderImpl) handlePublic() ([]*publicAsset, error) {
 	publicAssets := make([]*publicAsset, 0)
-	// hash := md5.New()
+	hash := md5.New()
 
 	err := filepath.Walk(b.config.PublicDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -172,16 +176,54 @@ func (b *builderImpl) handlePublic() ([]*publicAsset, error) {
 		b.counter++
 		fmt.Printf("==> Processing %q --> ", path)
 
-		split := strings.Split(path, string(os.PathSeparator))
-		split[0] = b.config.OutputDir
-		outP := filepath.Join(split...)
-
-		fb, err := ioutil.ReadFile(path)
+		fp, err := os.Open(path)
 		if err != nil {
 			return fmt.Errorf("could not read file %q: %w", path, err)
 		}
+		defer fp.Close()
 
-		err = ioutil.WriteFile(outP, fb, os.FileMode(_ReadWrite))
+		// Generate the hash
+		_, err = io.Copy(hash, fp)
+		if err != nil {
+			return fmt.Errorf("could not hash file %q: %w", path, err)
+		}
+
+		hashS := hex.EncodeToString(hash.Sum(nil)[:16])
+		hash.Reset()
+
+		// Reset the file reader so that it can be used again below
+		_, err = fp.Seek(0, 0)
+		if err != nil {
+			return fmt.Errorf("could not reset file reader %q: %w", path, err)
+		}
+
+		// Determine the output filepath
+		split := strings.Split(path, string(os.PathSeparator))
+		split[0] = b.config.OutputDir
+
+		// If the extension matches one in $b.config.HashExts, then add the
+		// md5 hash to the filename
+		ext := filepath.Ext(path)
+		for _, cmp := range b.config.HashExts {
+			if ext == cmp {
+				fsplit := strings.Split(info.Name(), ".")
+				fsplit = append(fsplit[:len(fsplit)-1], hashS[:8], fsplit[len(fsplit)-1])
+				split[len(split)-1] = strings.Join(fsplit, ".")
+
+				break
+			}
+		}
+
+		outP := filepath.Join(split...)
+
+		// Finally create the output file and write content to it
+		outF, err := os.Create(outP)
+		if err != nil {
+			return fmt.Errorf("could not create file %q: %w", outP, err)
+		}
+		defer outF.Close()
+
+		_, err = io.Copy(outF, fp)
 		if err != nil {
 			return fmt.Errorf("could not write file %q: %w", outP, err)
 		}
@@ -192,6 +234,7 @@ func (b *builderImpl) handlePublic() ([]*publicAsset, error) {
 			// served, they will be served from the root.
 			originalPath: filepath.Join(strings.Split(path, string(os.PathSeparator))[1:]...),
 			path:         filepath.Join(strings.Split(outP, string(os.PathSeparator))[1:]...),
+			md5:          hashS,
 		})
 
 		fmt.Printf("DONE\n")
