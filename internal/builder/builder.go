@@ -50,7 +50,8 @@ type postData struct {
 	Title       string
 	Description string
 	Date        time.Time
-	Markdown    string
+	Content     string
+	Path        string
 }
 
 var (
@@ -91,8 +92,7 @@ func New(c *Config) (Builder, error) {
 
 	builder.markdown = goldmark.New(
 		goldmark.WithExtensions(meta.Meta),
-		goldmark.WithRendererOptions(html.WithUnsafe()),
-	)
+		goldmark.WithRendererOptions(html.WithUnsafe()))
 
 	return builder, nil
 }
@@ -136,15 +136,15 @@ func (b *builderImpl) Build() error {
 		return err
 	}
 
-	_, err = b.handlePosts(publicAssets)
+	postList, err := b.handlePosts(publicAssets)
 	if err != nil {
 		return err
 	}
 
-	// 	err = b.handlePages(publicList, postList)
-	// 	if err != nil {
-	// 		return err
-	// 	}
+	err = b.handlePages(publicAssets, postList)
+	if err != nil {
+		return err
+	}
 
 	fmt.Printf("Processed %d files in %s\n", b.counter, time.Since(t0))
 
@@ -152,7 +152,7 @@ func (b *builderImpl) Build() error {
 }
 
 func (b *builderImpl) handlePublic() (map[string]string, error) {
-	publicAssets := make(map[string]string, 0)
+	publicAssets := make(map[string]string)
 	hash := md5.New()
 
 	err := filepath.Walk(b.config.PublicDir, func(path string, info os.FileInfo, err error) error {
@@ -318,7 +318,8 @@ func (b *builderImpl) handlePosts(publicAssets map[string]string) ([]*postData, 
 			Title:       pCtx["title"].(string),
 			Date:        pCtx["date"].(time.Time),
 			Description: pCtx["description"].(string),
-			Markdown:    pCtx["content"].(string),
+			Content:     pCtx["content"].(string),
+			Path:        "/" + strings.Join(strings.Split(outP, string(os.PathSeparator))[1:], "/"),
 		})
 
 		fmt.Printf("DONE\n")
@@ -330,7 +331,7 @@ func (b *builderImpl) handlePosts(publicAssets map[string]string) ([]*postData, 
 	}
 
 	sort.SliceStable(postList, func(i, j int) bool {
-		return postList[i].Date.Before(postList[j].Date)
+		return postList[i].Date.After(postList[j].Date)
 	})
 
 	return postList, nil
@@ -443,6 +444,7 @@ func (b *builderImpl) handleMd(
 
 	// Render markdown
 	ctx := parser.NewContext()
+
 	err = b.markdown.Convert(fb, buf, parser.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("could not render markdown in %q: %w", path, err)

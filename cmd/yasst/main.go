@@ -18,6 +18,7 @@ func main() {
 	flag.StringVar(&c.DefaultDescription, "description", "my website description", "description of this website")
 	flag.StringVar(&c.DefaultTitle, "title", "my website", "title of this website")
 	flag.StringVar(&c.DefaultPostTemplate, "post-template", "post.html", "default post template, relative to templates directory")
+	flag.StringVar(&c.DefaultPageTemplate, "page-template", "page.html", "default page template, relative to templates directory")
 	flag.BoolVar(&c.RSS, "rss", true, "create rss.xml from posts")
 	flag.StringSliceVar(&c.HashExts, "hash-exts", []string{".js", ".css"}, "hash public files with these extensions such that output files include hashes in their names")
 	flag.Parse()
