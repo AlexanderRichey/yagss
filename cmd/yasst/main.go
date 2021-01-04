@@ -17,6 +17,7 @@ func main() {
 	flag.StringVarP(&c.OutputDir, "output", "o", "build", "output directory, relative to current working directory")
 	flag.StringVar(&c.DefaultDescription, "description", "my website description", "description of this website")
 	flag.StringVar(&c.DefaultTitle, "title", "my website", "title of this website")
+	flag.StringVar(&c.URL, "url", "http://localhost", "url of this website")
 	flag.StringVar(&c.DefaultPostTemplate, "post-template", "post.html", "default post template, relative to templates directory")
 	flag.StringVar(&c.DefaultPageTemplate, "page-template", "page.html", "default page template, relative to templates directory")
 	flag.StringVar(&c.PostsIndex, "posts-index", "index.html", "the template to use for rendering the index of your posts, relative to the pages directory")

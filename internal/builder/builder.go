@@ -35,6 +35,7 @@ type Config struct {
 	DefaultPageTemplate string
 	PostsIndex          string
 	PostsPerPage        int
+	URL                 string
 }
 
 type Builder interface {
@@ -144,6 +145,11 @@ func (b *builderImpl) Build() error {
 	}
 
 	err = b.handlePages(publicAssets, postList)
+	if err != nil {
+		return err
+	}
+
+	err = b.handleRSS(postList)
 	if err != nil {
 		return err
 	}
@@ -524,7 +530,7 @@ func (b *builderImpl) handlePostsIdx(path string, postList []*postData, publicAs
 
 	tpl, err := b.templates.FromBytes(fb)
 	if err != nil {
-		return fmt.Errorf("could not compile page %q: %w", path, err)
+		return fmt.Errorf("could not compile template %q: %w", path, err)
 	}
 
 	plist := getPlist(b.config.PostsPerPage, postList)
@@ -583,6 +589,61 @@ func (b *builderImpl) handlePostsIdx(path string, postList []*postData, publicAs
 			return fmt.Errorf("could not render page %q: %w", outP, err)
 		}
 	}
+
+	return nil
+}
+
+func (b *builderImpl) handleRSS(postList []*postData) error {
+	if len(postList) == 0 {
+		return nil
+	}
+
+	var posts []*postData
+	if len(postList) >= 3 {
+		posts = postList[:3]
+	} else {
+		posts = postList
+	}
+
+	b.counter++
+	fmt.Printf("==> Processing %q --> ", "rss.xml")
+
+	tpl, err := b.templates.FromString(rssT)
+	if err != nil {
+		return fmt.Errorf("could not compile rss template: %w", err)
+	}
+
+	for i := range posts {
+		split := strings.Split(posts[i].Content, "</p>")
+		if len(split) > 0 {
+			posts[i].Content = strings.ReplaceAll(split[0], "\n", " ")
+		} else {
+			posts[i].Content = "Nothing here."
+		}
+
+		posts[i].Path = fmt.Sprintf("%s%s", b.config.URL, posts[i].Path)
+	}
+
+	outP := filepath.Join(b.config.OutputDir, "rss.xml")
+
+	outF, err := os.Create(outP)
+	if err != nil {
+		return fmt.Errorf("could not create file %q: %w", outP, err)
+	}
+	defer outF.Close()
+
+	err = tpl.ExecuteWriter(pongo2.Context{
+		"title":       b.config.DefaultTitle,
+		"url":         b.config.URL,
+		"description": b.config.DefaultDescription,
+		"date":        postList[0].Date,
+		"posts":       posts,
+	}, outF)
+	if err != nil {
+		return fmt.Errorf("could not render rss %q: %w", outP, err)
+	}
+
+	fmt.Print("DONE\n")
 
 	return nil
 }
