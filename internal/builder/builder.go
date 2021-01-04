@@ -7,24 +7,30 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/flosch/pongo2/v4"
 	"github.com/yuin/goldmark"
 	meta "github.com/yuin/goldmark-meta"
+	"github.com/yuin/goldmark/parser"
 )
 
 type Config struct {
-	TemplatesDir string
-	PagesDir     string
-	PostsDir     string
-	PublicDir    string
-	OutputDir    string
-	RSS          bool
-	HashExts     []string
+	TemplatesDir        string
+	PagesDir            string
+	PostsDir            string
+	PublicDir           string
+	OutputDir           string
+	RSS                 bool
+	HashExts            []string
+	DefaultTitle        string
+	DefaultDescription  string
+	DefaultPostTemplate string
 }
 
 type Builder interface {
@@ -59,7 +65,9 @@ type publicAsset struct {
 }
 
 var (
-	ErrNotDir = errors.New("not a directory")
+	ErrNotDir                = errors.New("not a directory")
+	ErrNotSerializable       = errors.New("not serializable")
+	ErrRequriedFieldNotFound = errors.New("required field not found")
 )
 
 const (
@@ -121,15 +129,15 @@ func (b *builderImpl) Build() error {
 
 	fmt.Printf("Starting build...\n")
 
-	_, err = b.handlePublic()
+	publicAssets, err := b.handlePublic()
 	if err != nil {
 		return err
 	}
 
-	// 	postList, err := b.handlePosts(publicList)
-	// 	if err != nil {
-	// 		return err
-	// 	}
+	_, err = b.handlePosts(publicAssets)
+	if err != nil {
+		return err
+	}
 
 	// 	err = b.handlePages(publicList, postList)
 	// 	if err != nil {
@@ -248,55 +256,152 @@ func (b *builderImpl) handlePublic() ([]*publicAsset, error) {
 	return publicAssets, nil
 }
 
-// func (b *builderImpl) handlePosts(publicAssets []*publicAsset) ([]*markdownData, error) {
-// 	postList := make([]*markdownData, 0)
+func (b *builderImpl) handlePosts(publicAssets []*publicAsset) ([]*postData, error) {
+	postList := make([]*postData, 0)
 
-// 	err := filepath.Walk(b.config.PostsDir, func(path string, info os.FileInfo, err error) error {
-// 		if err != nil {
-// 			return err
-// 		}
+	// Create the output dir
+	err := os.MkdirAll(
+		filepath.Join(b.config.OutputDir, b.config.PostsDir),
+		os.FileMode(_ReadWriteExecute))
+	if err != nil {
+		return nil, fmt.Errorf("could not create posts dir: %w", err)
+	}
 
-// 		if info.IsDir() {
-// 			// Flatten posts if they are nested
-// 			return nil
-// 		}
+	err = filepath.Walk(b.config.PostsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
 
-// 		b.counter++
-// 		fmt.Printf("==> Processing %q --> ", path)
+		if info.IsDir() {
+			// Flatten posts if they are nested
+			return nil
+		}
 
-// 		if filepath.Ext(path) != ".md" {
-// 			fmt.Printf("SKIPPED\n")
-// 			return nil
-// 		}
+		b.counter++
+		fmt.Printf("==> Processing %q --> ", path)
 
-// 		md, err := b.handleMarkdownFile(path)
-// 		if err != nil {
-// 			return err
-// 		}
+		if filepath.Ext(path) != ".md" {
+			fmt.Printf("SKIPPED\n")
 
-// 		postList = append(postList, md)
+			return nil
+		}
 
-// 		compiled, err := md.template.Execute(pongo2.Context{"content": md.markdown.String()})
-// 		if err != nil {
-// 			return fmt.Errorf("could not render template: %w", err)
-// 		}
+		fb, err := ioutil.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("could not read post %q: %w", path, err)
+		}
 
-// 		if err := b.writeHTML(path, compiled); err != nil {
-// 			return err
-// 		}
+		postD := new(postData)
+		postD.markdown = new(bytes.Buffer)
 
-// 		fmt.Printf("DONE\n")
+		// Render markdown
+		ctx := parser.NewContext()
+		err = b.markdown.Convert(fb, postD.markdown, parser.WithContext(ctx))
+		if err != nil {
+			return fmt.Errorf("could not render markdown in %q: %w", path, err)
+		}
 
-// 		return nil
-// 	})
-// 	if err != nil {
-// 		return nil, err
-// 	}
+		// Get front-matter
+		data, err := msi2mss(meta.Get(ctx))
+		if err != nil {
+			return fmt.Errorf("could not process front-matter on %q: %w", path, err)
+		}
 
-// 	// TODO: Sort postList
+		// Check for required fields
+		for _, key := range []string{"title", "date"} {
+			if _, ok := data[key]; !ok {
+				return fmt.Errorf("%w: %q", ErrRequriedFieldNotFound, key)
+			}
+		}
 
-// 	return postList, nil
-// }
+		// Gather metadata
+		postD.title = data["title"]
+
+		postD.date, err = time.Parse("2006-01-02", data["date"])
+		if err != nil {
+			return fmt.Errorf("could not parse date %q: %w", data["date"], err)
+		}
+
+		// Optional description metadata
+		if dat, ok := data["description"]; ok {
+			postD.description = dat
+		} else {
+			postD.description = b.config.DefaultDescription
+		}
+
+		// The default post template can be overridden with a front-matter
+		// directive
+		var tplP string
+		if dat, ok := data["template"]; ok {
+			tplP = dat
+		} else {
+			tplP = b.config.DefaultPostTemplate
+		}
+
+		// Get the base post template
+		postD.template, err = b.templates.FromFile(tplP)
+		if err != nil {
+			return fmt.Errorf("could not get template %q: %w", tplP, err)
+		}
+
+		// Compile an intermediate template in case there are template directives
+		// inside the markdown file
+		itpl, err := b.templates.FromString(postD.markdown.String())
+		if err != nil {
+			return fmt.Errorf("could not compile intermediate template: %w", err)
+		}
+
+		mdS, err := itpl.Execute(pongo2.Context{"assets": publicAssets})
+		if err != nil {
+			return fmt.Errorf("could not render intermediate template: %w", err)
+		}
+
+		// Determine the output path
+		split := strings.Split(path, string(os.PathSeparator))
+		split[0] = b.config.OutputDir
+		split = append(split[:1], append([]string{b.config.PostsDir}, split[1:]...)...)
+		fsplit := strings.Split(info.Name(), ".")
+		fsplit[len(fsplit)-1] = "html"
+		split[len(split)-1] = strings.Join(fsplit, ".")
+		outP := filepath.Join(split...)
+
+		// Finally create the output file and write content to it
+		outF, err := os.Create(outP)
+		if err != nil {
+			return fmt.Errorf("could not create file %q: %w", outP, err)
+		}
+		defer outF.Close()
+
+		// We write the output from rendering the base template
+		err = postD.template.ExecuteWriter(pongo2.Context{
+			"content":     mdS,
+			"assets":      publicAssets,
+			"title":       b.config.DefaultTitle,
+			"postTitle":   postD.title,
+			"date":        postD.date,
+			"description": postD.description,
+			"extra":       data,
+		}, outF)
+		if err != nil {
+			return fmt.Errorf("could not render template %q to %q: %w", tplP, outP, err)
+		}
+
+		postList = append(postList, postD)
+
+		fmt.Printf("DONE\n")
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error walking posts dir: %w", err)
+	}
+
+	sort.SliceStable(postList, func(i, j int) bool {
+		return postList[i].date.Before(postList[j].date)
+	})
+
+	return postList, nil
+}
 
 // func (b *builderImpl) handlePages(publicAssets []*publicAsset, postList []*markdownData) error {
 // 	return filepath.Walk(b.config.PagesDir, func(path string, info os.FileInfo, err error) error {
@@ -403,3 +508,18 @@ func (b *builderImpl) handlePublic() ([]*publicAsset, error) {
 
 // 	return nil
 // }
+
+func msi2mss(msi map[string]interface{}) (map[string]string, error) {
+	data := make(map[string]string, 0)
+
+	for key, val := range msi {
+		s, ok := val.(string)
+		if !ok {
+			return nil, fmt.Errorf("%w: key %q", ErrNotSerializable, key)
+		}
+
+		data[key] = s
+	}
+
+	return data, nil
+}
