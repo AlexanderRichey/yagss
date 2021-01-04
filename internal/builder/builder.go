@@ -33,6 +33,8 @@ type Config struct {
 	DefaultDescription  string
 	DefaultPostTemplate string
 	DefaultPageTemplate string
+	PostsIndex          string
+	PostsPerPage        int
 }
 
 type Builder interface {
@@ -360,36 +362,10 @@ func (b *builderImpl) handlePages(publicAssets map[string]string, postList []*po
 
 		switch filepath.Ext(path) {
 		case ".html":
-			{
-				fb, err := ioutil.ReadFile(path)
-				if err != nil {
-					return fmt.Errorf("could not read file %q: %w", path, err)
-				}
-
-				tpl, err := b.templates.FromBytes(fb)
-				if err != nil {
-					return fmt.Errorf("could not compile page %q: %w", path, err)
-				}
-
-				// Determine the output path
-				split := strings.Split(path, string(os.PathSeparator))
-				split[0] = b.config.OutputDir
-				outP := filepath.Join(split...)
-
-				// Create the output file and write content to it
-				outF, err := os.Create(outP)
-				if err != nil {
-					return fmt.Errorf("could not create file %q: %w", outP, err)
-				}
-				defer outF.Close()
-
-				err = tpl.ExecuteWriter(pongo2.Context{
-					"posts":  postList,
-					"assets": publicAssets,
-				}, outF)
-				if err != nil {
-					return fmt.Errorf("could not render page %q: %w", outP, err)
-				}
+			if filepath.Base(b.config.PostsIndex) == info.Name() {
+				err = b.handlePostsIdx(path, postList, publicAssets)
+			} else {
+				err = b.handleHTML(path, publicAssets)
 			}
 		case ".md":
 			{
@@ -403,7 +379,7 @@ func (b *builderImpl) handlePages(publicAssets map[string]string, postList []*po
 
 				_, err = b.handleMd(path, outP, b.config.DefaultPageTemplate, publicAssets,
 					func(data map[string]string) (pongo2.Context, error) {
-						p2ctx := pongo2.Context{"posts": postList}
+						p2ctx := pongo2.Context{}
 
 						// Optional metadata
 						if dat, ok := data["description"]; ok {
@@ -507,9 +483,113 @@ func (b *builderImpl) handleMd(
 	return p2ctx, nil
 }
 
+func (b *builderImpl) handleHTML(path string, publicAssets map[string]string) error {
+	fb, err := ioutil.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("could not read file %q: %w", path, err)
+	}
+
+	tpl, err := b.templates.FromBytes(fb)
+	if err != nil {
+		return fmt.Errorf("could not compile page %q: %w", path, err)
+	}
+
+	// Determine the output path
+	split := strings.Split(path, string(os.PathSeparator))
+	split[0] = b.config.OutputDir
+	outP := filepath.Join(split...)
+
+	// Create the output file and write content to it
+	outF, err := os.Create(outP)
+	if err != nil {
+		return fmt.Errorf("could not create file %q: %w", outP, err)
+	}
+	defer outF.Close()
+
+	err = tpl.ExecuteWriter(pongo2.Context{
+		"assets": publicAssets,
+	}, outF)
+	if err != nil {
+		return fmt.Errorf("could not render page %q: %w", outP, err)
+	}
+
+	return nil
+}
+
+func (b *builderImpl) handlePostsIdx(path string, postList []*postData, publicAssets map[string]string) error {
+	fb, err := ioutil.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("could not read file %q: %w", path, err)
+	}
+
+	tpl, err := b.templates.FromBytes(fb)
+	if err != nil {
+		return fmt.Errorf("could not compile page %q: %w", path, err)
+	}
+
+	plist := getPlist(b.config.PostsPerPage, postList)
+
+	for i, posts := range plist {
+		// Determine next and prev urls
+		next := ""
+		prev := ""
+
+		if len(plist) > i+1 {
+			next = fmt.Sprintf("/page%d", i+2)
+		}
+
+		if i > 0 {
+			if i-1 == 0 {
+				prev = "/" + strings.Join(strings.Split(path, string(os.PathSeparator))[1:], "/")
+			} else {
+				prev = fmt.Sprintf("/page%d", i+1)
+			}
+		}
+
+		// Determine the output path
+		split := strings.Split(path, string(os.PathSeparator))
+		split[0] = b.config.OutputDir
+
+		// if i > 0, then we're on a new page that will need
+		// its own output dir.
+		if i > 0 {
+			pageS := fmt.Sprintf("page%d", i+1)
+
+			err := b.mkOutDir(filepath.Join(b.config.OutputDir, pageS))
+			if err != nil {
+				return err
+			}
+
+			// adjust the output path
+			split = append(split[:1], []string{pageS, "index.html"}...)
+		}
+
+		outP := filepath.Join(split...)
+
+		// Create the output file and write content to it
+		outF, err := os.Create(outP)
+		if err != nil {
+			return fmt.Errorf("could not create file %q: %w", outP, err)
+		}
+		defer outF.Close()
+
+		err = tpl.ExecuteWriter(pongo2.Context{
+			"posts":  posts,
+			"assets": publicAssets,
+			"next":   next,
+			"prev":   prev,
+		}, outF)
+		if err != nil {
+			return fmt.Errorf("could not render page %q: %w", outP, err)
+		}
+	}
+
+	return nil
+}
+
 func (b *builderImpl) mkOutDir(path string) error {
 	// We replace the first dir in the path with the output dir. We expect
-	// split[0] to be $b.config.PublicDir.
+	// split[0] to be $b.config.PublicDir or some other such nested dir.
 	split := strings.Split(path, string(os.PathSeparator))
 	split[0] = b.config.OutputDir
 	dirP := filepath.Join(split...)
@@ -535,4 +615,21 @@ func msi2mss(msi map[string]interface{}) (map[string]string, error) {
 	}
 
 	return data, nil
+}
+
+func getPlist(psize int, postList []*postData) [][]*postData {
+	postPgs := make([][]*postData, 0)
+	idx := -1
+
+	for i, p := range postList {
+		if i%psize == 0 {
+			ns := make([]*postData, 0)
+			postPgs = append(postPgs, ns)
+			idx++
+		}
+
+		postPgs[idx] = append(postPgs[idx], p)
+	}
+
+	return postPgs
 }
