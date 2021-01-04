@@ -16,6 +16,7 @@ import (
 
 	"github.com/flosch/pongo2/v4"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark-highlighting"
 	meta "github.com/yuin/goldmark-meta"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
@@ -94,7 +95,7 @@ func New(c *Config) (Builder, error) {
 	}
 
 	builder.markdown = goldmark.New(
-		goldmark.WithExtensions(meta.Meta),
+		goldmark.WithExtensions(meta.Meta, highlighting.Highlighting),
 		goldmark.WithRendererOptions(html.WithUnsafe()))
 
 	return builder, nil
