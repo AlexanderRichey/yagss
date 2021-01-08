@@ -39,7 +39,7 @@ type config struct {
 	}
 }
 
-func newConfig() (*builderConfig, error) {
+func ReadConfig() (*Config, error) {
 	b, err := ioutil.ReadFile("./config.toml")
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func newConfig() (*builderConfig, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	return &builderConfig{
+	return &Config{
 		SiteTitle:           c.Site.Title,
 		SiteDescription:     c.Site.Description,
 		SiteURL:             c.Site.URL,

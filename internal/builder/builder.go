@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -37,14 +38,15 @@ const (
 )
 
 type Builder struct {
-	config    *builderConfig
+	config    *Config
 	templates *pongo2.TemplateSet
 	markdown  goldmark.Markdown
 	mini      *mini.Creator
 	counter   int
+	log       *log.Logger
 }
 
-type builderConfig struct {
+type Config struct {
 	SiteURL             string
 	SiteTitle           string
 	SiteDescription     string
@@ -70,14 +72,16 @@ type postData struct {
 }
 
 // New creates a new Builder instance. It initializes dependencies needed
-// to do the work of building.
-func New() (*Builder, error) {
-	c, err := newConfig()
-	if err != nil {
-		return nil, fmt.Errorf("could not read config: %w", err)
-	}
-
+// to do the work of building. If l is nil, a default logger is used.
+func New(c *Config, l *log.Logger) (*Builder, error) {
 	builder := &Builder{config: c}
+
+	// Init logger
+	if l != nil {
+		builder.log = l
+	} else {
+		builder.log = log.New(os.Stderr, "", 0)
+	}
 
 	// Init pongo2
 	loader, err := pongo2.NewLocalFileSystemLoader(c.TemplatesDir)
@@ -143,7 +147,7 @@ func (b *Builder) Build() error {
 		return fmt.Errorf("could not create output dir: %w", err)
 	}
 
-	fmt.Printf("Starting build...\n")
+	b.log.Printf("Starting build...\n")
 
 	publicAssets, err := b.handlePublic()
 	if err != nil {
@@ -165,7 +169,7 @@ func (b *Builder) Build() error {
 		return err
 	}
 
-	fmt.Printf("Processed %d files in %s\n", b.counter, time.Since(t0))
+	b.log.Printf("Processed %d files in %s\n", b.counter, time.Since(t0))
 
 	return nil
 }
@@ -192,7 +196,7 @@ func (b *Builder) handlePublic() (map[string]string, error) {
 		}
 
 		b.counter++
-		fmt.Printf("==> Processing %q --> ", path)
+		b.log.Printf("==> Processing %q", path)
 
 		fp, err := os.Open(path)
 		if err != nil {
@@ -251,8 +255,6 @@ func (b *Builder) handlePublic() (map[string]string, error) {
 		publicAssets[filepath.Join(strings.Split(path, string(os.PathSeparator))[1:]...)] =
 			"/" + strings.Join(strings.Split(outP, string(os.PathSeparator))[1:], "/")
 
-		fmt.Printf("DONE\n")
-
 		return nil
 	})
 	if err != nil {
@@ -284,10 +286,10 @@ func (b *Builder) handlePosts(publicAssets map[string]string) ([]*postData, erro
 		}
 
 		b.counter++
-		fmt.Printf("==> Processing %q --> ", path)
+		b.log.Printf("==> Processing %q", path)
 
 		if filepath.Ext(path) != ".md" {
-			fmt.Printf("SKIPPED\n")
+			b.log.Printf("SKIPPED\n")
 
 			return nil
 		}
@@ -341,8 +343,6 @@ func (b *Builder) handlePosts(publicAssets map[string]string) ([]*postData, erro
 			Path:        "/" + strings.Join(strings.Split(outP, string(os.PathSeparator))[1:], "/"),
 		})
 
-		fmt.Printf("DONE\n")
-
 		return nil
 	})
 	if err != nil {
@@ -375,7 +375,7 @@ func (b *Builder) handlePages(publicAssets map[string]string, postList []*postDa
 		}
 
 		b.counter++
-		fmt.Printf("==> Processing %q --> ", path)
+		b.log.Printf("==> Processing %q", path)
 
 		switch filepath.Ext(path) {
 		case ".html":
@@ -416,8 +416,6 @@ func (b *Builder) handlePages(publicAssets map[string]string, postList []*postDa
 		if err != nil {
 			return fmt.Errorf("error processing file %q: %w", path, err)
 		}
-
-		fmt.Printf("DONE\n")
 
 		return nil
 	})
@@ -617,7 +615,7 @@ func (b *Builder) handleRSS(postList []*postData) error {
 	}
 
 	b.counter++
-	fmt.Printf("==> Processing %q --> ", "rss.xml")
+	b.log.Printf("==> Processing %q", "rss.xml")
 
 	tpl, err := b.templates.FromString(rssT)
 	if err != nil {
@@ -653,8 +651,6 @@ func (b *Builder) handleRSS(postList []*postData) error {
 	if err != nil {
 		return fmt.Errorf("could not render rss %q: %w", outP, err)
 	}
-
-	fmt.Print("DONE\n")
 
 	return nil
 }
