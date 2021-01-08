@@ -12,7 +12,7 @@ const rssT = `<?xml version="1.0" encoding="UTF-8"?>
     {% for post in posts %}
     <item>
       <title>{{ post.Title }}</title>
-      <link>{{ post.Path }}</link>
+      <link>{{ post.URL }}</link>
       <pubDate>{{ post.Date }}</pubDate>
       <description>{{ post.Content|striptags }}</description>
     </item>

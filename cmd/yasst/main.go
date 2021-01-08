@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/AlexanderRichey/yasst/internal/builder"
+	"github.com/AlexanderRichey/yasst/internal/proj"
 	"github.com/AlexanderRichey/yasst/internal/server"
 )
 
@@ -13,17 +14,22 @@ func main() {
 	log.SetFlags(0)
 
 	cmdNew := &cobra.Command{
-		Use:   "new",
+		Use:   "new <directory name>",
 		Short: "Create a new yagss site",
 		Long:  `create a new yagss site in the current working directory with the given name`,
 		Args:  cobra.MinimumNArgs(1),
-		Run:   func(cmd *cobra.Command, args []string) {},
+		Run: func(cmd *cobra.Command, args []string) {
+			err := proj.New(args[0])
+			if err != nil {
+				log.Fatal(err)
+			}
+		},
 	}
 
 	cmdBuild := &cobra.Command{
 		Use:   "build",
-		Short: "Build your static site",
-		Long: `build your static site using the config.toml file
+		Short: "Build the current yagss site",
+		Long: `build the current yagss site using the config.toml file
 in the current working directory.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			c, err := builder.ReadConfig()
