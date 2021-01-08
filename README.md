@@ -2,6 +2,9 @@
 
 `yasst` is short for yet another static site.
 
+- [ ] Configure syntax highlighting
+- [ ] Skeleton command
+
 ```
 # Take a directory tree like this one.
 $ tree
@@ -41,8 +44,8 @@ static/
 ├── rss.xml
 ├── posts
 │   └── first-post.html
-├── scripts-78hdyfuis.min.js
-├── styles-gyhuij9.min.js
+├── scripts.78hdyfuis.min.js
+├── styles.gyhuij9.min.js
 └── my-image.jpg
 
 ```

@@ -16,38 +16,49 @@ import (
 
 	"github.com/flosch/pongo2/v4"
 	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark-highlighting"
+	highlighting "github.com/yuin/goldmark-highlighting"
 	meta "github.com/yuin/goldmark-meta"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
+
+	"github.com/AlexanderRichey/yasst/mini"
 )
 
-type Config struct {
+var (
+	errNotDir                = errors.New("not a directory")
+	errNotSerializable       = errors.New("not serializable")
+	errRequriedFieldNotFound = errors.New("required field not found")
+	errInvalidFormat         = errors.New("invalid file format")
+)
+
+const (
+	_ReadWriteExecute = 0777
+	_ReadWrite        = 0666
+)
+
+type Builder struct {
+	config    *builderConfig
+	templates *pongo2.TemplateSet
+	markdown  goldmark.Markdown
+	mini      *mini.Creator
+	counter   int
+}
+
+type builderConfig struct {
+	SiteURL             string
+	SiteTitle           string
+	SiteDescription     string
 	TemplatesDir        string
 	PagesDir            string
 	PostsDir            string
 	PublicDir           string
 	OutputDir           string
-	RSS                 bool
-	HashExts            []string
-	DefaultTitle        string
-	DefaultDescription  string
 	DefaultPostTemplate string
 	DefaultPageTemplate string
 	PostsIndex          string
 	PostsPerPage        int
-	URL                 string
-}
-
-type Builder interface {
-	Build() error
-}
-
-type builderImpl struct {
-	config    *Config
-	templates *pongo2.TemplateSet
-	markdown  goldmark.Markdown
-	counter   int
+	RSS                 bool
+	HashExts            []string
 }
 
 type postData struct {
@@ -58,50 +69,49 @@ type postData struct {
 	Path        string
 }
 
-var (
-	ErrNotDir                = errors.New("not a directory")
-	ErrNotSerializable       = errors.New("not serializable")
-	ErrRequriedFieldNotFound = errors.New("required field not found")
-	ErrInvalidFormat         = errors.New("invalid file format")
-)
-
-const (
-	_ReadWriteExecute = 0777
-	_ReadWrite        = 0666
-)
-
 // New creates a new Builder instance. It initializes dependencies needed
 // to do the work of building.
-func New(c *Config) (Builder, error) {
-	builder := &builderImpl{config: c}
+func New() (*Builder, error) {
+	c, err := newConfig()
+	if err != nil {
+		return nil, fmt.Errorf("could not read config: %w", err)
+	}
 
+	builder := &Builder{config: c}
+
+	// Init pongo2
 	loader, err := pongo2.NewLocalFileSystemLoader(c.TemplatesDir)
 	if err != nil {
 		return nil, fmt.Errorf("could not load templates: %w", err)
 	}
 
-	builder.templates, err = pongo2.NewSet("web", loader), nil
+	builder.templates, err = pongo2.NewSet("templates", loader), nil
 	if err != nil {
 		return nil, fmt.Errorf("could not load templates: %w", err)
 	}
 
-	err = pongo2.RegisterFilter("path", func(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
-		m := in.Interface().(map[string]string)
+	err = pongo2.RegisterFilter("key",
+		func(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
+			m := in.Interface().(map[string]string)
 
-		return pongo2.AsValue(m[param.String()]), nil
-	})
+			return pongo2.AsValue(m[param.String()]), nil
+		})
 	if err != nil {
 		return nil, fmt.Errorf("could not register filter: %w", err)
 	}
 
+	// Init goldmark
 	builder.markdown = goldmark.New(
 		goldmark.WithExtensions(meta.Meta, highlighting.Highlighting),
 		goldmark.WithRendererOptions(html.WithUnsafe()))
 
+	// Init mini
+	builder.mini = mini.New()
+
 	return builder, nil
 }
 
-func (b *builderImpl) Build() error {
+func (b *Builder) Build() error {
 	t0 := time.Now()
 
 	// Verify that posts, pages, public, and templates dirs exist
@@ -117,7 +127,7 @@ func (b *builderImpl) Build() error {
 		}
 
 		if !info.IsDir() {
-			return fmt.Errorf("%w: %q", ErrNotDir, dir)
+			return fmt.Errorf("%w: %q", errNotDir, dir)
 		}
 	}
 
@@ -160,7 +170,7 @@ func (b *builderImpl) Build() error {
 	return nil
 }
 
-func (b *builderImpl) handlePublic() (map[string]string, error) {
+func (b *Builder) handlePublic() (map[string]string, error) {
 	publicAssets := make(map[string]string)
 	hash := md5.New()
 
@@ -225,7 +235,7 @@ func (b *builderImpl) handlePublic() (map[string]string, error) {
 		outP := filepath.Join(split...)
 
 		// Finally create the output file and write content to it
-		outF, err := os.Create(outP)
+		outF, err := b.mini.Create(outP)
 		if err != nil {
 			return fmt.Errorf("could not create file %q: %w", outP, err)
 		}
@@ -252,7 +262,7 @@ func (b *builderImpl) handlePublic() (map[string]string, error) {
 	return publicAssets, nil
 }
 
-func (b *builderImpl) handlePosts(publicAssets map[string]string) ([]*postData, error) {
+func (b *Builder) handlePosts(publicAssets map[string]string) ([]*postData, error) {
 	postList := make([]*postData, 0)
 
 	// Create the output dir
@@ -298,7 +308,7 @@ func (b *builderImpl) handlePosts(publicAssets map[string]string) ([]*postData, 
 				// Check for required fields
 				for _, key := range []string{"title", "date"} {
 					if _, ok := data[key]; !ok {
-						return nil, fmt.Errorf("%w: %q", ErrRequriedFieldNotFound, key)
+						return nil, fmt.Errorf("%w: %q", errRequriedFieldNotFound, key)
 					}
 				}
 
@@ -314,7 +324,7 @@ func (b *builderImpl) handlePosts(publicAssets map[string]string) ([]*postData, 
 				if dat, ok := data["description"]; ok {
 					p2ctx["description"] = dat
 				} else {
-					p2ctx["description"] = b.config.DefaultDescription
+					p2ctx["description"] = b.config.SiteDescription
 				}
 
 				return p2ctx, nil
@@ -346,7 +356,7 @@ func (b *builderImpl) handlePosts(publicAssets map[string]string) ([]*postData, 
 	return postList, nil
 }
 
-func (b *builderImpl) handlePages(publicAssets map[string]string, postList []*postData) error {
+func (b *Builder) handlePages(publicAssets map[string]string, postList []*postData) error {
 	return filepath.Walk(b.config.PagesDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -401,7 +411,7 @@ func (b *builderImpl) handlePages(publicAssets map[string]string, postList []*po
 					})
 			}
 		default:
-			err = fmt.Errorf("%w: %q", ErrInvalidFormat, path)
+			err = fmt.Errorf("%w: %q", errInvalidFormat, path)
 		}
 		if err != nil {
 			return fmt.Errorf("error processing file %q: %w", path, err)
@@ -413,7 +423,7 @@ func (b *builderImpl) handlePages(publicAssets map[string]string, postList []*po
 	})
 }
 
-func (b *builderImpl) handleMd(
+func (b *Builder) handleMd(
 	path, outP, defaultTplP string,
 	publicAssets map[string]string,
 	getPongo2Ctx func(map[string]string) (pongo2.Context, error),
@@ -475,7 +485,7 @@ func (b *builderImpl) handleMd(
 	p2ctx["assets"] = publicAssets
 
 	// Finally create the output file and write content to it
-	outF, err := os.Create(outP)
+	outF, err := b.mini.Create(outP)
 	if err != nil {
 		return nil, fmt.Errorf("could not create file %q: %w", outP, err)
 	}
@@ -490,7 +500,7 @@ func (b *builderImpl) handleMd(
 	return p2ctx, nil
 }
 
-func (b *builderImpl) handleHTML(path string, publicAssets map[string]string) error {
+func (b *Builder) handleHTML(path string, publicAssets map[string]string) error {
 	fb, err := ioutil.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("could not read file %q: %w", path, err)
@@ -507,7 +517,7 @@ func (b *builderImpl) handleHTML(path string, publicAssets map[string]string) er
 	outP := filepath.Join(split...)
 
 	// Create the output file and write content to it
-	outF, err := os.Create(outP)
+	outF, err := b.mini.Create(outP)
 	if err != nil {
 		return fmt.Errorf("could not create file %q: %w", outP, err)
 	}
@@ -523,7 +533,7 @@ func (b *builderImpl) handleHTML(path string, publicAssets map[string]string) er
 	return nil
 }
 
-func (b *builderImpl) handlePostsIdx(path string, postList []*postData, publicAssets map[string]string) error {
+func (b *Builder) handlePostsIdx(path string, postList []*postData, publicAssets map[string]string) error {
 	fb, err := ioutil.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("could not read file %q: %w", path, err)
@@ -574,7 +584,7 @@ func (b *builderImpl) handlePostsIdx(path string, postList []*postData, publicAs
 		outP := filepath.Join(split...)
 
 		// Create the output file and write content to it
-		outF, err := os.Create(outP)
+		outF, err := b.mini.Create(outP)
 		if err != nil {
 			return fmt.Errorf("could not create file %q: %w", outP, err)
 		}
@@ -594,7 +604,7 @@ func (b *builderImpl) handlePostsIdx(path string, postList []*postData, publicAs
 	return nil
 }
 
-func (b *builderImpl) handleRSS(postList []*postData) error {
+func (b *Builder) handleRSS(postList []*postData) error {
 	if len(postList) == 0 {
 		return nil
 	}
@@ -622,21 +632,21 @@ func (b *builderImpl) handleRSS(postList []*postData) error {
 			posts[i].Content = "Nothing here."
 		}
 
-		posts[i].Path = fmt.Sprintf("%s%s", b.config.URL, posts[i].Path)
+		posts[i].Path = fmt.Sprintf("%s%s", b.config.SiteURL, posts[i].Path)
 	}
 
 	outP := filepath.Join(b.config.OutputDir, "rss.xml")
 
-	outF, err := os.Create(outP)
+	outF, err := b.mini.Create(outP)
 	if err != nil {
 		return fmt.Errorf("could not create file %q: %w", outP, err)
 	}
 	defer outF.Close()
 
 	err = tpl.ExecuteWriter(pongo2.Context{
-		"title":       b.config.DefaultTitle,
-		"url":         b.config.URL,
-		"description": b.config.DefaultDescription,
+		"title":       b.config.SiteTitle,
+		"url":         b.config.SiteURL,
+		"description": b.config.SiteDescription,
 		"date":        postList[0].Date,
 		"posts":       posts,
 	}, outF)
@@ -649,7 +659,7 @@ func (b *builderImpl) handleRSS(postList []*postData) error {
 	return nil
 }
 
-func (b *builderImpl) mkOutDir(path string) error {
+func (b *Builder) mkOutDir(path string) error {
 	// We replace the first dir in the path with the output dir. We expect
 	// split[0] to be $b.config.PublicDir or some other such nested dir.
 	split := strings.Split(path, string(os.PathSeparator))
@@ -670,7 +680,7 @@ func msi2mss(msi map[string]interface{}) (map[string]string, error) {
 	for key, val := range msi {
 		s, ok := val.(string)
 		if !ok {
-			return nil, fmt.Errorf("%w: key %q", ErrNotSerializable, key)
+			return nil, fmt.Errorf("%w: key %q", errNotSerializable, key)
 		}
 
 		data[key] = s

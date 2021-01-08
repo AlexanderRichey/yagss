@@ -1,0 +1,21 @@
+[site]
+  title = "My site"
+  description = "Here is my wonderful website."
+  url = "https://my-website.com"
+
+[directories]
+  templates = "templates"
+  pages = "pages"
+  posts = "posts"
+  public = "public"
+  output = "build"
+
+[defaults]
+  pageTemplate = "page.html"
+  postTemplate = "post.html"
+
+[build]
+  postsIndex = "index.html"
+  postsPerPage = 3 
+  rss = true
+  hash = [".js", ".css"]

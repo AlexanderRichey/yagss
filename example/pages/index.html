@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+  {% for post in posts %}
+    <article>
+      <h2>
+        <a href="{{ post.Path }}">{{ post.Title }}</a>
+      </h2>
+      <time datetime="{{ post.Date }}">{{ post.Date|date:"2 Jan 2006" }}</time>
+    </article>
+  {% endfor %}
+  {% include 'pagination.html' %}
+{% endblock %}

@@ -1,0 +1,17 @@
+<nav>
+  {% if prev %}
+    <span>
+      <a href="{{ prev }}">Newer</a>
+    </span>
+  {% endif %}
+
+  {% if prev and next %}
+    <span>&middot;</span>
+  {% endif %}
+
+  {% if next %}
+    <span>
+      <a href="{{ next }}">Older</a>
+    </span>
+  {% endif %}
+</nav>

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ pageTitle }}</title>
+    <meta name="description" content="{{ pageDescription }}" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="alternate" type="application/rss+xml" href="/rss.xml" />
+  </head>
+  <body>
+    <header>
+      <h1>My barebones website</h1>
+    </header>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/about.html">About</a>
+    </nav>
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+    <footer>
+      <p>Copyright &copy; 2021</p>
+    </footer>
+  </body>
+</html>
