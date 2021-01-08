@@ -25,7 +25,14 @@ type Creator struct {
 func New() *Creator {
 	m := minify.New()
 	m.AddFunc("text/css", css.Minify)
-	m.AddFunc("text/html", html.Minify)
+	m.Add("text/html", &html.Minifier{
+		KeepDocumentTags:        true,
+		KeepEndTags:             true,
+		KeepConditionalComments: true,
+		KeepDefaultAttrVals:     false,
+		KeepQuotes:              false,
+		KeepWhitespace:          false,
+	})
 	m.AddFunc("image/svg+xml", svg.Minify)
 	m.AddFuncRegexp(regexp.MustCompile("^(application|text)/(x-)?(java|ecma)script$"), js.Minify)
 	m.AddFuncRegexp(regexp.MustCompile("[/+]json$"), json.Minify)

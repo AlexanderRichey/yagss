@@ -3,6 +3,7 @@ module github.com/AlexanderRichey/yasst
 go 1.15
 
 require (
+	github.com/alecthomas/chroma v0.7.2-0.20200305040604-4f3623dce67a
 	github.com/flosch/pongo2/v4 v4.0.2
 	github.com/gorilla/handlers v1.4.1
 	github.com/pelletier/go-toml v1.8.1

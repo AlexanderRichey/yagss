@@ -4,10 +4,6 @@ date: 2021-01-03
 ---
 Can I keep these posts going? Here's some code:
 
-```javascript
-console.log("hello!")
-```
-
 ```python
 def qsort(arr, cb=lambda a, b: a < b):
     arr_len = len(arr)

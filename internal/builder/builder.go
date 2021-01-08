@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	chromahtml "github.com/alecthomas/chroma/formatters/html"
 	"github.com/flosch/pongo2/v4"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting"
@@ -57,6 +58,8 @@ type Config struct {
 	OutputDir           string
 	DefaultPostTemplate string
 	DefaultPageTemplate string
+	ChromaTheme         string
+	ChromaLineNumbers   bool
 	PostsIndex          string
 	PostsPerPage        int
 	RSS                 bool
@@ -69,6 +72,7 @@ type postData struct {
 	Date        time.Time
 	Content     string
 	Path        string
+	URL         string
 }
 
 // New creates a new Builder instance. It initializes dependencies needed
@@ -106,7 +110,9 @@ func New(c *Config, l *log.Logger) (*Builder, error) {
 
 	// Init goldmark
 	builder.markdown = goldmark.New(
-		goldmark.WithExtensions(meta.Meta, highlighting.Highlighting),
+		goldmark.WithExtensions(meta.Meta, highlighting.NewHighlighting(
+			highlighting.WithStyle(c.ChromaTheme),
+			highlighting.WithFormatOptions(chromahtml.WithLineNumbers(c.ChromaLineNumbers)))),
 		goldmark.WithRendererOptions(html.WithUnsafe()))
 
 	// Init mini
@@ -316,6 +322,7 @@ func (b *Builder) handlePosts(publicAssets map[string]string) ([]*postData, erro
 
 				// Gather metadata
 				p2ctx["title"] = data["title"]
+				p2ctx["pageTitle"] = fmt.Sprintf("%s | %s", b.config.SiteTitle, data["title"])
 
 				p2ctx["date"], err = time.Parse("2006-01-02", data["date"])
 				if err != nil {
@@ -325,8 +332,10 @@ func (b *Builder) handlePosts(publicAssets map[string]string) ([]*postData, erro
 				// Optional description metadata
 				if dat, ok := data["description"]; ok {
 					p2ctx["description"] = dat
+					p2ctx["pageDescription"] = dat
 				} else {
 					p2ctx["description"] = b.config.SiteDescription
+					p2ctx["pageDescription"] = b.config.SiteDescription
 				}
 
 				return p2ctx, nil
@@ -335,12 +344,15 @@ func (b *Builder) handlePosts(publicAssets map[string]string) ([]*postData, erro
 			return fmt.Errorf("error generating markdown: %w", err)
 		}
 
+		postPath := "/" + strings.Join(strings.Split(outP, string(os.PathSeparator))[1:], "/")
+
 		postList = append(postList, &postData{
 			Title:       pCtx["title"].(string),
 			Date:        pCtx["date"].(time.Time),
 			Description: pCtx["description"].(string),
 			Content:     pCtx["content"].(string),
-			Path:        "/" + strings.Join(strings.Split(outP, string(os.PathSeparator))[1:], "/"),
+			Path:        postPath,
+			URL:         fmt.Sprintf("%s%s", b.config.SiteURL, postPath),
 		})
 
 		return nil
@@ -396,15 +408,21 @@ func (b *Builder) handlePages(publicAssets map[string]string, postList []*postDa
 
 				_, err = b.handleMd(path, outP, b.config.DefaultPageTemplate, publicAssets,
 					func(data map[string]string) (pongo2.Context, error) {
-						p2ctx := pongo2.Context{}
+						p2ctx := pongo2.Context{
+							"pageTitle":       b.config.SiteTitle,
+							"pageDescription": b.config.SiteDescription,
+							"siteURL":         b.config.SiteURL,
+						}
 
 						// Optional metadata
 						if dat, ok := data["description"]; ok {
 							p2ctx["description"] = dat
+							p2ctx["pageDescription"] = dat
 						}
 
 						if dat, ok := data["title"]; ok {
 							p2ctx["title"] = dat
+							p2ctx["pageTitle"] = fmt.Sprintf("%s | %s", b.config.SiteTitle, dat)
 						}
 
 						return p2ctx, nil
@@ -522,7 +540,10 @@ func (b *Builder) handleHTML(path string, publicAssets map[string]string) error 
 	defer outF.Close()
 
 	err = tpl.ExecuteWriter(pongo2.Context{
-		"assets": publicAssets,
+		"pageTitle":       b.config.SiteTitle,
+		"pageDescription": b.config.SiteDescription,
+		"siteURL":         b.config.SiteURL,
+		"assets":          publicAssets,
 	}, outF)
 	if err != nil {
 		return fmt.Errorf("could not render page %q: %w", outP, err)
@@ -589,10 +610,13 @@ func (b *Builder) handlePostsIdx(path string, postList []*postData, publicAssets
 		defer outF.Close()
 
 		err = tpl.ExecuteWriter(pongo2.Context{
-			"posts":  posts,
-			"assets": publicAssets,
-			"next":   next,
-			"prev":   prev,
+			"pageTitle":       b.config.SiteTitle,
+			"pageDescription": b.config.SiteDescription,
+			"siteURL":         b.config.SiteURL,
+			"posts":           posts,
+			"assets":          publicAssets,
+			"next":            next,
+			"prev":            prev,
 		}, outF)
 		if err != nil {
 			return fmt.Errorf("could not render page %q: %w", outP, err)
@@ -629,8 +653,6 @@ func (b *Builder) handleRSS(postList []*postData) error {
 		} else {
 			posts[i].Content = "Nothing here."
 		}
-
-		posts[i].Path = fmt.Sprintf("%s%s", b.config.SiteURL, posts[i].Path)
 	}
 
 	outP := filepath.Join(b.config.OutputDir, "rss.xml")

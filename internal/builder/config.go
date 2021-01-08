@@ -28,8 +28,10 @@ type config struct {
 		Output    string `human:"directories.output"`
 	}
 	Defaults struct {
-		PageTemplate string `human:"defaults.pageTemplate"`
-		PostTemplate string `human:"defaults.postTemplate"`
+		PageTemplate      string `human:"defaults.pageTemplate"`
+		PostTemplate      string `human:"defaults.postTemplate"`
+		ChromaTheme       string `human:"defaults.chromaTheme"`
+		ChromaLineNumbers bool   `human:"defaults.chromaLineNumbers"`
 	}
 	Build struct {
 		PostsIndex   string   `human:"build.postsIndex"`
@@ -68,6 +70,8 @@ func ReadConfig() (*Config, error) {
 		OutputDir:           c.Directories.Output,
 		DefaultPostTemplate: c.Defaults.PostTemplate,
 		DefaultPageTemplate: c.Defaults.PageTemplate,
+		ChromaTheme:         c.Defaults.ChromaTheme,
+		ChromaLineNumbers:   c.Defaults.ChromaLineNumbers,
 		PostsIndex:          c.Build.PostsIndex,
 		PostsPerPage:        c.Build.PostsPerPage,
 		RSS:                 c.Build.RSS,

@@ -13,6 +13,8 @@
 [defaults]
   pageTemplate = "page.html"
   postTemplate = "post.html"
+  chromaTheme = "friendly"
+  chromaLineNumbers = false
 
 [build]
   postsIndex = "index.html"
