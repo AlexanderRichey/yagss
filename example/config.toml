@@ -1,23 +1,57 @@
 [site]
+  # The default title of the site. On posts or pages with a "title"
+  # field, the title is formed by joining the default title with
+  # a "|" and the page title. For example: "My site | My post"
   title = "My site"
+  # The description of the site, used in the site's description
+  # meta tag.
   description = "Here is my wonderful website."
+  # The base url of the site. This is used when generating the site's
+  # RSS feed, if enabled.
   url = "https://my-website.com"
 
 [directories]
+  # The templates directory contains templates and partials. Unlike
+  # pages, they are not compiled on their own. In other words,
+  # if a "templates/index.html" file exists, but not file in "pages"
+  # refers to it, then it will not be included in the site's built
+  # output. In contrast, "pages/index.html" will be included.
   templates = "templates"
+  # The pages directory contains pages that can be in markdown or
+  # html format. Pages can also use template directives and they
+  # are compiled to the site's output.
   pages = "pages"
+  # The posts directory contains markdown blog posts. Its usage is
+  # optional.
   posts = "posts"
+  # Files and sub-directories in this directory are moved to the root of
+  # the output directory. Files that end with .html, .css, .js, .jsx,
+  # .svg, .xml, or .json are automatically minified.
   public = "public"
+  # The directory into which built assets are placed.
   output = "build"
 
 [defaults]
+  # This template is used to process any markdown file in the pages
+  # directory
   pageTemplate = "page.html"
+  # This template is used to process any markdown file in the posts
+  # directory
   postTemplate = "post.html"
+  # The following two directives control the behavior of chroma, which
+  # is used for syntax highlighting in markdown files.
   chromaTheme = "friendly"
   chromaLineNumbers = false
 
 [build]
+  # postsIndex is a template that is used to generate the index of
+  # posts. It should include support for pagination and should
+  # iterate through all available posts.
   postsIndex = "index.html"
   postsPerPage = 3 
+  # When true, an rss.xml file is built containing information from the 
+  # available posts.
   rss = true
+  # Files whose extensions are in the following array include an md5 hash
+  # in their name when they are compiled. This enables cache-busting.
   hash = [".js", ".css"]

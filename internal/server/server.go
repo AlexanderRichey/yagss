@@ -15,7 +15,7 @@ import (
 
 	"gopkg.in/fsnotify.v1"
 
-	"github.com/AlexanderRichey/yasst/internal/builder"
+	"github.com/AlexanderRichey/yagss/internal/builder"
 	"github.com/gorilla/handlers"
 )
 

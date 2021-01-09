@@ -23,7 +23,7 @@ import (
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
 
-	"github.com/AlexanderRichey/yasst/mini"
+	"github.com/AlexanderRichey/yagss/mini"
 )
 
 var (

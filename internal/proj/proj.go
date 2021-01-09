@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/AlexanderRichey/yasst/internal/proj/data"
+	"github.com/AlexanderRichey/yagss/internal/proj/data"
 )
 
 func New(name string) error {

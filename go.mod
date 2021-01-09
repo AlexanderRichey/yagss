@@ -1,4 +1,4 @@
-module github.com/AlexanderRichey/yasst
+module github.com/AlexanderRichey/yagss
 
 go 1.15
 

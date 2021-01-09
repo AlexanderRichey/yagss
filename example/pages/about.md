@@ -1,4 +1,4 @@
 ---
 title: About
 ---
-Here I am lol.
+Here is the "about" page.

@@ -5,10 +5,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/AlexanderRichey/yasst/internal/builder"
-	"github.com/AlexanderRichey/yasst/internal/proj"
-	"github.com/AlexanderRichey/yasst/internal/server"
+	"github.com/AlexanderRichey/yagss/internal/builder"
+	"github.com/AlexanderRichey/yagss/internal/proj"
+	"github.com/AlexanderRichey/yagss/internal/server"
 )
+
+var port int
 
 func main() {
 	log.SetFlags(0)
@@ -49,7 +51,6 @@ in the current working directory.`,
 		},
 	}
 
-	var port int
 	cmdServe := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve the current yagss site and auto build when files change",

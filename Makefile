@@ -1,6 +1,6 @@
 yagss: gen
 	mkdir -p build/bin
-	go build -o build/bin/yasst cmd/yasst/main.go
+	go build -o build/bin/yagss cmd/yagss/main.go
 
 .PHONY: gen
 gen:
