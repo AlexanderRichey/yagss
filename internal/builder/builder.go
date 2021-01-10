@@ -494,7 +494,7 @@ func (b *Builder) handleMd(
 
 	p2ctx, err := getPongo2Ctx(data)
 	if err != nil {
-		return nil, fmt.Errorf("could create pongo2 context: %w", err)
+		return nil, fmt.Errorf("could not create pongo2 context: %w", err)
 	}
 
 	p2ctx["content"] = mdS
@@ -578,7 +578,7 @@ func (b *Builder) handlePostsIdx(path string, postList []*postData, publicAssets
 			if i-1 == 0 {
 				prev = "/" + strings.Join(strings.Split(path, string(os.PathSeparator))[1:], "/")
 			} else {
-				prev = fmt.Sprintf("/page%d", i+1)
+				prev = fmt.Sprintf("/page%d", i)
 			}
 		}
 

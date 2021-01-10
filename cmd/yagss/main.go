@@ -8,12 +8,22 @@ import (
 	"github.com/AlexanderRichey/yagss/internal/builder"
 	"github.com/AlexanderRichey/yagss/internal/proj"
 	"github.com/AlexanderRichey/yagss/internal/server"
+	"github.com/AlexanderRichey/yagss/internal/version"
 )
 
 var port int
 
 func main() {
 	log.SetFlags(0)
+
+	cmdVersion := &cobra.Command{
+		Use:   "version",
+		Short: "Print yagss version",
+		Long:  "print yagss version",
+		Run: func(cmd *cobra.Command, args []string) {
+			log.Printf("yagss v%s", version.Version)
+		},
+	}
 
 	cmdNew := &cobra.Command{
 		Use:   "new <directory name>",
@@ -71,7 +81,7 @@ rebuild when source files change`,
 	cmdServe.Flags().IntVar(&port, "port", 3000, "default port")
 
 	rootCmd := &cobra.Command{Use: "yagss"}
-	rootCmd.AddCommand(cmdNew, cmdBuild, cmdServe)
+	rootCmd.AddCommand(cmdNew, cmdBuild, cmdServe, cmdVersion)
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)

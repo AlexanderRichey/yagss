@@ -24,8 +24,6 @@ Use "yagss [command] --help" for more information about a command.
 
 ## Quickstart
 
-Create a new site.
-
 ```
 $ yagss new demo
 Creaing new yagss project in "demo"
