@@ -177,6 +177,8 @@ func (b *Builder) Build() error {
 
 	b.log.Printf("Processed %d files in %s\n", b.counter, time.Since(t0))
 
+	b.counter = 0
+
 	return nil
 }
 

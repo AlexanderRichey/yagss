@@ -8,7 +8,7 @@ local: gen
 	go build -ldflags "${LINKER_FLAGS}" -o build/bin/yagss cmd/yagss/main.go
 
 install: gen
-	go install -ldflags "${LINKER_FLAGS}" cmd/yagss/main.go
+	@cd cmd/yagss && go install -ldflags "${LINKER_FLAGS}"
 
 compile-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "${LINKER_FLAGS} ${RELEASE_BUILD_LINKER_FLAGS}" -o build/bin/yagss-linux-amd64 ./cmd/yagss

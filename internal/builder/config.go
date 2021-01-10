@@ -21,23 +21,23 @@ type config struct {
 		URL         string `human:"site.url"`
 	}
 	Directories struct {
-		Templates string `human:"directories.templates"`
-		Pages     string `human:"directories.pages"`
-		Posts     string `human:"directories.posts"`
-		Public    string `human:"directories.public"`
-		Output    string `human:"directories.output"`
+		Includes string `human:"directories.includes"`
+		Pages    string `human:"directories.pages"`
+		Posts    string `human:"directories.posts"`
+		Public   string `human:"directories.public"`
+		Output   string `human:"directories.output"`
 	}
 	Defaults struct {
-		PageTemplate      string `human:"defaults.pageTemplate"`
-		PostTemplate      string `human:"defaults.postTemplate"`
-		ChromaTheme       string `human:"defaults.chromaTheme"`
-		ChromaLineNumbers bool   `human:"defaults.chromaLineNumbers"`
+		PageTemplate string `human:"defaults.pageTemplate"`
+		PostTemplate string `human:"defaults.postTemplate"`
 	}
 	Build struct {
-		PostsIndex   string   `human:"build.postsIndex"`
-		PostsPerPage int      `human:"build.postsPerPage"`
-		RSS          bool     `human:"build.rss"`
-		Hash         []string `human:"build.hash"`
+		PostsIndexPage    string   `human:"build.postsIndexPage"`
+		PostsPerPage      int      `human:"build.postsPerPage"`
+		ChromaTheme       string   `human:"build.chromaTheme"`
+		ChromaLineNumbers bool     `human:"build.chromaLineNumbers"`
+		RSS               bool     `human:"build.rss"`
+		Hash              []string `human:"build.hash"`
 	}
 }
 
@@ -63,16 +63,16 @@ func ReadConfig() (*Config, error) {
 		SiteTitle:           c.Site.Title,
 		SiteDescription:     c.Site.Description,
 		SiteURL:             c.Site.URL,
-		TemplatesDir:        c.Directories.Templates,
+		TemplatesDir:        c.Directories.Includes,
 		PagesDir:            c.Directories.Pages,
 		PostsDir:            c.Directories.Posts,
 		PublicDir:           c.Directories.Public,
 		OutputDir:           c.Directories.Output,
 		DefaultPostTemplate: c.Defaults.PostTemplate,
 		DefaultPageTemplate: c.Defaults.PageTemplate,
-		ChromaTheme:         c.Defaults.ChromaTheme,
-		ChromaLineNumbers:   c.Defaults.ChromaLineNumbers,
-		PostsIndex:          c.Build.PostsIndex,
+		ChromaTheme:         c.Build.ChromaTheme,
+		ChromaLineNumbers:   c.Build.ChromaLineNumbers,
+		PostsIndex:          c.Build.PostsIndexPage,
 		PostsPerPage:        c.Build.PostsPerPage,
 		RSS:                 c.Build.RSS,
 		HashExts:            c.Build.Hash,

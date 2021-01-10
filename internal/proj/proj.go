@@ -7,12 +7,15 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/AlexanderRichey/yagss/internal/proj/data"
 )
 
 func New(name string) error {
 	log.Printf("Creaing new yagss project in %q", name)
+
+	t0 := time.Now()
 
 	projTree.Path = name
 
@@ -21,7 +24,7 @@ func New(name string) error {
 		return fmt.Errorf("could not build project tree: %w", err)
 	}
 
-	log.Print("DONE")
+	log.Printf("Done in %s", time.Since(t0))
 
 	return nil
 }
@@ -49,11 +52,11 @@ var projTree = &node{IsDir: true, Path: ".", Children: []*node{
 		&node{IsDir: false, Path: "styles.css", Data: data.MustAsset("../../example/public/styles.css")},
 		&node{IsDir: false, Path: "favicon.ico", Data: data.MustAsset("../../example/public/favicon.ico")},
 	}},
-	&node{IsDir: true, Path: "templates", Children: []*node{
-		&node{IsDir: false, Path: "base.html", Data: data.MustAsset("../../example/templates/base.html")},
-		&node{IsDir: false, Path: "page.html", Data: data.MustAsset("../../example/templates/page.html")},
-		&node{IsDir: false, Path: "post.html", Data: data.MustAsset("../../example/templates/post.html")},
-		&node{IsDir: false, Path: "pagination.html", Data: data.MustAsset("../../example/templates/pagination.html")},
+	&node{IsDir: true, Path: "includes", Children: []*node{
+		&node{IsDir: false, Path: "base.html", Data: data.MustAsset("../../example/includes/base.html")},
+		&node{IsDir: false, Path: "page.html", Data: data.MustAsset("../../example/includes/page.html")},
+		&node{IsDir: false, Path: "post.html", Data: data.MustAsset("../../example/includes/post.html")},
+		&node{IsDir: false, Path: "pagination.html", Data: data.MustAsset("../../example/includes/pagination.html")},
 	}},
 	&node{IsDir: true, Path: "build"},
 }}

@@ -1,6 +1,6 @@
 # 🐐 yagss
 
-`yagss` is short for *yet another generator of static sites*. `yagss` supports blogs and non-blogs. It uses [Jinja](https://jinja.palletsprojects.com/en/2.11.x/) style templates via [pongo2](https://github.com/flosch/pongo2), supports markdown, RSS feed generation, cache-busting of static assets, and minifies output by default. Unlike [Jekyll](https://jekyllrb.com/) and [Hugo](https://gohugo.io/), there are no themes--just HTML templates and CSS, which you fully control.
+`yagss` is short for *yet another generator of static sites*. `yagss` supports blogs and non-blogs. It uses [Jinja](https://jinja.palletsprojects.com/en/2.11.x/) style templates via [pongo2](https://github.com/flosch/pongo2), supports markdown (with codeblock syntax highlighting), RSS feed generation, cache-busting of static assets, and minifies output by default. Unlike [Jekyll](https://jekyllrb.com/) and [Hugo](https://gohugo.io/), there are no themes–just HTML templates and CSS, which you fully control.
 
 `yagss` is intended help make simple websites where all you really need is some HTML, CSS, and maybe a bit of JavaScript. See the quickstart and documentation below for more information.
 
@@ -15,6 +15,7 @@ Available Commands:
   help        Help about any command
   new         Create a new yagss site
   serve       Serve the current yagss site and auto build when files change
+  version     Print yagss version
 
 Flags:
   -h, --help   help for yagss
@@ -32,7 +33,7 @@ Creaing new yagss project in "demo"
 ==> Creating "demo/posts" directory
 ...
 ==> Creating "demo/build" directory
-DONE
+Done in 1.694679ms
 $ cd demo
 $ yagss serve
 ----> Initial build
@@ -51,7 +52,7 @@ $ yagss serve
 [watcher] Watching "pages" directory
 [watcher] Watching "posts" directory
 [watcher] Watching "public" directory
-[watcher] Watching "templates" directory
+[watcher] Watching "includes" directory
 [server] Listening on port :3000
 # Now browse to http://localhost:3000
 ```
@@ -69,7 +70,7 @@ $ tree
 .
 ├── build
 ├── config.toml
-│   # config.toml allows for controling various build settings.
+│   # config.toml allows for controlling various build settings.
 ├── pages
 │   # The pages directory contains pages that can be in markdown or
 │   # html format. Pages can also use template directives and they
@@ -89,10 +90,10 @@ $ tree
 │   # .svg, .xml, or .json are automatically minified.
 │   ├── favicon.ico
 │   └── styles.css
-└── templates
-    # The templates directory contains templates and partials. Unlike
+└── includes
+    # The includes directory contains templates and partials. Unlike
     # pages, they are not compiled on their own. In other words,
-    # if a "templates/index.html" file exists, but no file in "pages"
+    # if a "includes/index.html" file exists, but no file in "pages"
     # refers to it, then it will not be included in the site's built
     # output. In contrast, "pages/index.html" will be included.
     ├── base.html
@@ -146,14 +147,14 @@ build/
 Assets must be referenced in templates and markdown files with the `assets` object and `key` filter. `assets` is a map of source-paths to output-paths, where its keys are source-paths of all files in the `public` directory. `assets` is made available to every template and markdown file.
 
 ```
-$ cat templates/base.html | grep assets
+$ cat includes/base.html | grep assets
     <link rel="icon" href="{{ assets|key:'favicon.ico' }}" />
     <link rel="stylesheet" href="{{ assets|key:'styles.css' }}" />
 ```
 
 ### Pages
 
-Pages must be placed in the `directories.pages` directory and can be nested. The directory tree is preserved when building. Posts can be in markdown or HTML format and can use template directives. If pages are in markdown format, the `defaults.pageTemplate` is used to render the page. This can be overridden by specifying a `template` key in the markdown front-matter whose value is a path to a template in the `directories.templates` directory. Here's an example.
+Pages must be placed in the `directories.pages` directory and can be nested. The directory tree is preserved when building. Posts can be in markdown or HTML format and can use template directives. If pages are in markdown format, the `defaults.pageTemplate` is used to render the page. This can be overridden by specifying a `template` key in the markdown front-matter whose value is a path to a template in the `directories.includes` directory. Here's an example.
 
 ```
 ---
