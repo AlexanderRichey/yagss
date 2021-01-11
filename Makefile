@@ -7,7 +7,7 @@ local: gen
 	mkdir -p build/bin
 	go build -ldflags "${LINKER_FLAGS}" -o build/bin/yagss cmd/yagss/main.go
 
-install: gen
+install:
 	@cd cmd/yagss && go install -ldflags "${LINKER_FLAGS}"
 
 compile-linux:

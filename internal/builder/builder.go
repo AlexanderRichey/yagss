@@ -67,12 +67,15 @@ type Config struct {
 }
 
 type postData struct {
-	Title       string
-	Description string
-	Date        time.Time
-	Content     string
-	Path        string
-	URL         string
+	Title        string
+	Description  string
+	Date         time.Time
+	Content      string
+	Path         string
+	URL          string
+	localOutPath string
+	localSrcPath string
+	frontMatter  map[string]string
 }
 
 // New creates a new Builder instance. It initializes dependencies needed
@@ -273,99 +276,42 @@ func (b *Builder) handlePublic() (map[string]string, error) {
 }
 
 func (b *Builder) handlePosts(publicAssets map[string]string) ([]*postData, error) {
-	postList := make([]*postData, 0)
+	postList, err := b.gatherPosts(publicAssets)
+	if err != nil {
+		return postList, fmt.Errorf("error gathering posts: %w", err)
+	}
 
 	// Create the output dir
-	err := os.MkdirAll(
-		filepath.Join(b.config.OutputDir, b.config.PostsDir),
-		os.FileMode(_ReadWriteExecute))
-	if err != nil {
-		return nil, fmt.Errorf("could not create posts dir: %w", err)
+	if len(postList) > 0 {
+		err := os.MkdirAll(
+			filepath.Join(b.config.OutputDir, b.config.PostsDir),
+			os.FileMode(_ReadWriteExecute))
+		if err != nil {
+			return nil, fmt.Errorf("could not create posts dir: %w", err)
+		}
 	}
 
-	err = filepath.Walk(b.config.PostsDir, func(path string, info os.FileInfo, err error) error {
+	for _, post := range postList {
+		tpl, err := b.resolveTplFromFM(b.config.DefaultPostTemplate, post.frontMatter)
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("error resolving post template: %w", err)
 		}
 
-		if info.IsDir() {
-			// Flatten posts if they are nested
-			return nil
-		}
-
-		b.counter++
-		b.log.Printf("==> Processing %q", path)
-
-		if filepath.Ext(path) != ".md" {
-			b.log.Printf("SKIPPED\n")
-
-			return nil
-		}
-
-		// Determine the output path
-		split := strings.Split(path, string(os.PathSeparator))
-		split[0] = b.config.OutputDir
-		split = append(split[:1], append([]string{b.config.PostsDir}, split[1:]...)...)
-		fsplit := strings.Split(info.Name(), ".")
-		fsplit[len(fsplit)-1] = "html"
-		split[len(split)-1] = strings.Join(fsplit, ".")
-		outP := filepath.Join(split...)
-
-		pCtx, err := b.handleMd(path, outP, b.config.DefaultPostTemplate, publicAssets,
-			func(data map[string]string) (pongo2.Context, error) {
-				p2ctx := pongo2.Context{}
-
-				// Check for required fields
-				for _, key := range []string{"title", "date"} {
-					if _, ok := data[key]; !ok {
-						return nil, fmt.Errorf("%w: %q", errRequriedFieldNotFound, key)
-					}
-				}
-
-				// Gather metadata
-				p2ctx["title"] = data["title"]
-				p2ctx["pageTitle"] = fmt.Sprintf("%s | %s", b.config.SiteTitle, data["title"])
-
-				p2ctx["date"], err = time.Parse("2006-01-02", data["date"])
-				if err != nil {
-					return nil, fmt.Errorf("could not parse date %q: %w", data["date"], err)
-				}
-
-				// Optional description metadata
-				if dat, ok := data["description"]; ok {
-					p2ctx["description"] = dat
-					p2ctx["pageDescription"] = dat
-				} else {
-					p2ctx["description"] = b.config.SiteDescription
-					p2ctx["pageDescription"] = b.config.SiteDescription
-				}
-
-				return p2ctx, nil
-			})
-		if err != nil {
-			return fmt.Errorf("error generating markdown: %w", err)
-		}
-
-		postPath := "/" + strings.Join(strings.Split(outP, string(os.PathSeparator))[1:], "/")
-
-		postList = append(postList, &postData{
-			Title:       pCtx["title"].(string),
-			Date:        pCtx["date"].(time.Time),
-			Description: pCtx["description"].(string),
-			Content:     pCtx["content"].(string),
-			Path:        postPath,
-			URL:         fmt.Sprintf("%s%s", b.config.SiteURL, postPath),
+		b.writeTpl(tpl, post.localOutPath, pongo2.Context{
+			"siteURL":         b.config.SiteURL,
+			"pageTitle":       fmt.Sprintf("%s | %s", b.config.SiteTitle, post.Title),
+			"pageDescription": post.Description,
+			"assets":          publicAssets,
+			"title":           post.Title,
+			"date":            post.Date,
+			"content":         post.Content,
+			"path":            post.Path,
+			"url":             post.URL,
 		})
-
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("error walking posts dir: %w", err)
+		if err != nil {
+			return nil, fmt.Errorf("error writing post: %w", err)
+		}
 	}
-
-	sort.SliceStable(postList, func(i, j int) bool {
-		return postList[i].Date.After(postList[j].Date)
-	})
 
 	return postList, nil
 }
@@ -396,40 +342,10 @@ func (b *Builder) handlePages(publicAssets map[string]string, postList []*postDa
 			if filepath.Base(b.config.PostsIndex) == info.Name() {
 				err = b.handlePostsIdx(path, postList, publicAssets)
 			} else {
-				err = b.handleHTML(path, publicAssets)
+				err = b.handleHTMLPage(path, publicAssets)
 			}
 		case ".md":
-			{
-				// Determine the output path
-				split := strings.Split(path, string(os.PathSeparator))
-				split[0] = b.config.OutputDir
-				fsplit := strings.Split(info.Name(), ".")
-				fsplit[len(fsplit)-1] = "html"
-				split[len(split)-1] = strings.Join(fsplit, ".")
-				outP := filepath.Join(split...)
-
-				_, err = b.handleMd(path, outP, b.config.DefaultPageTemplate, publicAssets,
-					func(data map[string]string) (pongo2.Context, error) {
-						p2ctx := pongo2.Context{
-							"pageTitle":       b.config.SiteTitle,
-							"pageDescription": b.config.SiteDescription,
-							"siteURL":         b.config.SiteURL,
-						}
-
-						// Optional metadata
-						if dat, ok := data["description"]; ok {
-							p2ctx["description"] = dat
-							p2ctx["pageDescription"] = dat
-						}
-
-						if dat, ok := data["title"]; ok {
-							p2ctx["title"] = dat
-							p2ctx["pageTitle"] = fmt.Sprintf("%s | %s", b.config.SiteTitle, dat)
-						}
-
-						return p2ctx, nil
-					})
-			}
+			err = b.handleMDPage(path, publicAssets)
 		default:
 			err = fmt.Errorf("%w: %q", errInvalidFormat, path)
 		}
@@ -441,84 +357,54 @@ func (b *Builder) handlePages(publicAssets map[string]string, postList []*postDa
 	})
 }
 
-func (b *Builder) handleMd(
-	path, outP, defaultTplP string,
-	publicAssets map[string]string,
-	getPongo2Ctx func(map[string]string) (pongo2.Context, error),
-) (pongo2.Context, error) {
-	fb, err := ioutil.ReadFile(path)
+func (b *Builder) handleMDPage(path string, publicAssets map[string]string) error {
+	// Determine the output path
+	split := strings.Split(path, string(os.PathSeparator))
+	split[0] = b.config.OutputDir
+	fsplit := strings.Split(filepath.Base(path), ".")
+	fsplit[len(fsplit)-1] = "html"
+	split[len(split)-1] = strings.Join(fsplit, ".")
+	outP := filepath.Join(split...)
+
+	mdS, frontMatter, err := b.renderMD(path, publicAssets)
 	if err != nil {
-		return nil, fmt.Errorf("could not read post %q: %w", path, err)
+		return fmt.Errorf("could not read page %q: %w", path, err)
 	}
 
-	buf := new(bytes.Buffer)
-
-	// Render markdown
-	ctx := parser.NewContext()
-
-	err = b.markdown.Convert(fb, buf, parser.WithContext(ctx))
+	tpl, err := b.resolveTplFromFM(b.config.DefaultPageTemplate, frontMatter)
 	if err != nil {
-		return nil, fmt.Errorf("could not render markdown in %q: %w", path, err)
+		return fmt.Errorf("handle markdown page: %w", err)
 	}
 
-	// Get front-matter
-	data, err := msi2mss(meta.Get(ctx))
+	// Optional metadata
+	desc := b.config.SiteDescription
+	if dat, ok := frontMatter["description"]; ok {
+		desc = dat
+	}
+
+	title := ""
+	pageTitle := b.config.SiteTitle
+	if dat, ok := frontMatter["title"]; ok {
+		title = dat
+		pageTitle = fmt.Sprintf("%s | %s", b.config.SiteTitle, dat)
+	}
+
+	err = b.writeTpl(tpl, outP, pongo2.Context{
+		"pageTitle":       pageTitle,
+		"pageDescription": desc,
+		"siteURL":         b.config.SiteURL,
+		"assets":          publicAssets,
+		"title":           title,
+		"content":         mdS,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("could not process front-matter on %q: %w", path, err)
+		return fmt.Errorf("handle markdown page: %w", err)
 	}
 
-	// The default template can be overridden with a front-matter
-	// directive
-	var tplP string
-	if dat, ok := data["template"]; ok {
-		tplP = dat
-	} else {
-		tplP = defaultTplP
-	}
-
-	// Get the base template
-	bTpl, err := b.templates.FromFile(tplP)
-	if err != nil {
-		return nil, fmt.Errorf("could not get template %q: %w", tplP, err)
-	}
-
-	// Compile an intermediate template in case there are template directives
-	// inside the markdown file
-	itpl, err := b.templates.FromString(buf.String())
-	if err != nil {
-		return nil, fmt.Errorf("could not compile intermediate template: %w", err)
-	}
-
-	mdS, err := itpl.Execute(pongo2.Context{"assets": publicAssets})
-	if err != nil {
-		return nil, fmt.Errorf("could not render intermediate template: %w", err)
-	}
-
-	p2ctx, err := getPongo2Ctx(data)
-	if err != nil {
-		return nil, fmt.Errorf("could not create pongo2 context: %w", err)
-	}
-
-	p2ctx["content"] = mdS
-	p2ctx["assets"] = publicAssets
-
-	// Finally create the output file and write content to it
-	outF, err := b.mini.Create(outP)
-	if err != nil {
-		return nil, fmt.Errorf("could not create file %q: %w", outP, err)
-	}
-	defer outF.Close()
-
-	// We write the output from rendering the base template
-	err = bTpl.ExecuteWriter(p2ctx, outF)
-	if err != nil {
-		return nil, fmt.Errorf("could not render template %q to %q: %w", tplP, outP, err)
-	}
-
-	return p2ctx, nil
+	return nil
 }
 
-func (b *Builder) handleHTML(path string, publicAssets map[string]string) error {
+func (b *Builder) handleHTMLPage(path string, publicAssets map[string]string) error {
 	fb, err := ioutil.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("could not read file %q: %w", path, err)
@@ -534,19 +420,12 @@ func (b *Builder) handleHTML(path string, publicAssets map[string]string) error 
 	split[0] = b.config.OutputDir
 	outP := filepath.Join(split...)
 
-	// Create the output file and write content to it
-	outF, err := b.mini.Create(outP)
-	if err != nil {
-		return fmt.Errorf("could not create file %q: %w", outP, err)
-	}
-	defer outF.Close()
-
-	err = tpl.ExecuteWriter(pongo2.Context{
+	b.writeTpl(tpl, outP, pongo2.Context{
 		"pageTitle":       b.config.SiteTitle,
 		"pageDescription": b.config.SiteDescription,
 		"siteURL":         b.config.SiteURL,
 		"assets":          publicAssets,
-	}, outF)
+	})
 	if err != nil {
 		return fmt.Errorf("could not render page %q: %w", outP, err)
 	}
@@ -604,22 +483,15 @@ func (b *Builder) handlePostsIdx(path string, postList []*postData, publicAssets
 
 		outP := filepath.Join(split...)
 
-		// Create the output file and write content to it
-		outF, err := b.mini.Create(outP)
-		if err != nil {
-			return fmt.Errorf("could not create file %q: %w", outP, err)
-		}
-		defer outF.Close()
-
-		err = tpl.ExecuteWriter(pongo2.Context{
+		err = b.writeTpl(tpl, outP, pongo2.Context{
 			"pageTitle":       b.config.SiteTitle,
 			"pageDescription": b.config.SiteDescription,
 			"siteURL":         b.config.SiteURL,
-			"posts":           posts,
 			"assets":          publicAssets,
+			"posts":           posts,
 			"next":            next,
 			"prev":            prev,
-		}, outF)
+		})
 		if err != nil {
 			return fmt.Errorf("could not render page %q: %w", outP, err)
 		}
@@ -659,21 +531,174 @@ func (b *Builder) handleRSS(postList []*postData) error {
 
 	outP := filepath.Join(b.config.OutputDir, "rss.xml")
 
+	b.writeTpl(tpl, outP, pongo2.Context{
+		"title":       b.config.SiteTitle,
+		"url":         b.config.SiteURL,
+		"description": b.config.SiteDescription,
+		"date":        postList[0].Date,
+		"posts":       posts,
+	})
+	if err != nil {
+		return fmt.Errorf("could not render rss %q: %w", outP, err)
+	}
+
+	return nil
+}
+
+func (b *Builder) gatherPosts(publicAssets map[string]string) ([]*postData, error) {
+	postList := make([]*postData, 0)
+
+	// If PagesDir isn't defined, then don't bother with posts.
+	if b.config.PagesDir == "" {
+		return postList, nil
+	}
+
+	err := filepath.Walk(b.config.PostsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		b.counter++
+		b.log.Printf("==> Processing %q", path)
+
+		// Determine the output path
+		split := strings.Split(path, string(os.PathSeparator))
+		split[0] = b.config.OutputDir
+		split = append(split[:1], append([]string{b.config.PostsDir}, split[1:]...)...)
+		fsplit := strings.Split(info.Name(), ".")
+		fsplit[len(fsplit)-1] = "html"
+		split[len(split)-1] = strings.Join(fsplit, ".")
+		outP := filepath.Join(split...)
+		postPath := "/" + strings.Join(strings.Split(outP, string(os.PathSeparator))[1:], "/")
+
+		mdS, frontMatter, err := b.renderMD(path, publicAssets)
+		if err != nil {
+			return fmt.Errorf("could not process post: %w", err)
+		}
+
+		title, desc, pubDate, err := b.getPostMeta(frontMatter)
+		if err != nil {
+			return fmt.Errorf("could not get post metadata: %w", err)
+		}
+
+		postList = append(postList, &postData{
+			Title:        title,
+			Date:         pubDate,
+			Description:  desc,
+			Content:      mdS,
+			Path:         postPath,
+			URL:          fmt.Sprintf("%s%s", b.config.SiteURL, postPath),
+			localOutPath: outP,
+			localSrcPath: path,
+			frontMatter:  frontMatter,
+		})
+
+		return nil
+	})
+	if err != nil {
+		return postList, fmt.Errorf("error walking posts dir: %w", err)
+	}
+
+	sort.SliceStable(postList, func(i, j int) bool {
+		return postList[i].Date.After(postList[j].Date)
+	})
+
+	return postList, nil
+}
+
+func (b *Builder) getPostMeta(frontMatter map[string]string) (title, desc string, date time.Time, err error) {
+	// Check for required fields
+	for _, key := range []string{"title", "date"} {
+		if _, ok := frontMatter[key]; !ok {
+			return "", "", date, fmt.Errorf("%w: %q", errRequriedFieldNotFound, key)
+		}
+	}
+
+	pubDate, err := time.Parse("2006-01-02", frontMatter["date"])
+	if err != nil {
+		return "", "", date, fmt.Errorf("could not parse date %q: %w", frontMatter["date"], err)
+	}
+
+	// Optional description metadata
+	if _, ok := frontMatter["description"]; !ok {
+		frontMatter["description"] = b.config.SiteDescription
+	}
+
+	return frontMatter["title"], frontMatter["description"], pubDate, nil
+}
+
+func (b *Builder) renderMD(path string, publicAssets map[string]string) (string, map[string]string, error) {
+	fb, err := ioutil.ReadFile(path)
+	if err != nil {
+		return "", nil, fmt.Errorf("could not read post %q: %w", path, err)
+	}
+
+	buf := new(bytes.Buffer)
+
+	// Render markdown
+	ctx := parser.NewContext()
+
+	err = b.markdown.Convert(fb, buf, parser.WithContext(ctx))
+	if err != nil {
+		return "", nil, fmt.Errorf("could not render markdown in %q: %w", path, err)
+	}
+
+	// Get front-matter
+	frontMatter, err := msi2mss(meta.Get(ctx))
+	if err != nil {
+		return "", nil, fmt.Errorf("could not process front-matter on %q: %w", path, err)
+	}
+
+	// Compile an intermediate template in case there are template directives
+	// inside the markdown file
+	itpl, err := b.templates.FromString(buf.String())
+	if err != nil {
+		return "", nil, fmt.Errorf("could not compile intermediate template: %w", err)
+	}
+
+	mdS, err := itpl.Execute(pongo2.Context{"assets": publicAssets})
+	if err != nil {
+		return "", nil, fmt.Errorf("could not render intermediate template: %w", err)
+	}
+
+	return mdS, frontMatter, nil
+}
+
+func (b *Builder) resolveTplFromFM(defaultTplP string, frontMatter map[string]string) (*pongo2.Template, error) {
+	// The default template can be overridden with a front-matter
+	// directive
+	var tplP string
+	if dat, ok := frontMatter["template"]; ok {
+		tplP = dat
+	} else {
+		tplP = defaultTplP
+	}
+
+	// Get the base template
+	bTpl, err := b.templates.FromFile(tplP)
+	if err != nil {
+		return nil, fmt.Errorf("could not get template %q: %w", tplP, err)
+	}
+
+	return bTpl, err
+}
+
+func (b *Builder) writeTpl(tpl *pongo2.Template, outP string, p2ctx pongo2.Context) error {
+	// Finally create the output file and write content to it
 	outF, err := b.mini.Create(outP)
 	if err != nil {
 		return fmt.Errorf("could not create file %q: %w", outP, err)
 	}
 	defer outF.Close()
 
-	err = tpl.ExecuteWriter(pongo2.Context{
-		"title":       b.config.SiteTitle,
-		"url":         b.config.SiteURL,
-		"description": b.config.SiteDescription,
-		"date":        postList[0].Date,
-		"posts":       posts,
-	}, outF)
+	// We write the output from rendering the base template
+	err = tpl.ExecuteWriter(p2ctx, outF)
 	if err != nil {
-		return fmt.Errorf("could not render rss %q: %w", outP, err)
+		return fmt.Errorf("could not render template to %q: %w", outP, err)
 	}
 
 	return nil
