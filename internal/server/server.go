@@ -123,7 +123,8 @@ func watch(c *builder.Config, b *builder.Builder, doneC, closeC chan bool) {
 					return
 				}
 
-				if event.Op&fsnotify.Write == fsnotify.Write {
+				if event.Op&fsnotify.Write == fsnotify.Write ||
+					event.Op&fsnotify.Rename == fsnotify.Rename {
 					ll.Printf("%q has been modified", event.Name)
 
 					if err := b.Build(); err != nil {
