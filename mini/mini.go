@@ -1,6 +1,7 @@
 package mini
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,8 @@ import (
 	"github.com/tdewolff/minify/v2/svg"
 	"github.com/tdewolff/minify/v2/xml"
 )
+
+var ErrCloseMiniFile = errors.New("error closing mini file")
 
 // Creator can create mini.Files.
 type Creator struct {
@@ -75,21 +78,26 @@ func (f *File) Write(p []byte) (int, error) {
 }
 
 func (f *File) Close() error {
-	var err error
+	var (
+		err1 error
+		err2 error
+	)
 
 	if f.isMini {
-		werr := f.writer.Close()
-		if werr != nil {
-			err = fmt.Errorf("error closing minify.Writer: %w", werr)
-		}
+		err1 = f.writer.Close()
 	}
 
-	ferr := f.file.Close()
-	if ferr != nil {
-		err = fmt.Errorf("error closing os.File: %w", err)
+	err2 = f.file.Close()
+
+	if err1 != nil && err2 != nil {
+		return fmt.Errorf("%w: multiple errors: (1) %s; (2) %s", ErrCloseMiniFile, err1.Error(), err2.Error())
+	} else if err1 != nil {
+		return fmt.Errorf("%w: %s", ErrCloseMiniFile, err1.Error())
+	} else if err2 != nil {
+		return fmt.Errorf("%w: %s", ErrCloseMiniFile, err2.Error())
 	}
 
-	return err
+	return nil
 }
 
 func getMIME(path string) (mime string, ok bool) {
