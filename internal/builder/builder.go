@@ -291,7 +291,18 @@ func (b *Builder) handlePosts(publicAssets map[string]string) ([]*postData, erro
 		}
 	}
 
-	for _, post := range postList {
+	for i, post := range postList {
+		var (
+			prevPost *postData
+			nextPost *postData
+		)
+		if prevIdx := i + 1; prevIdx < len(postList) {
+			prevPost = postList[prevIdx]
+		}
+		if nextIdx := i - 1; nextIdx >= 0 {
+			nextPost = postList[nextIdx]
+		}
+
 		tpl, err := b.resolveTplFromFM(b.config.DefaultPostTemplate, post.frontMatter)
 		if err != nil {
 			return nil, fmt.Errorf("error resolving post template: %w", err)
@@ -307,6 +318,8 @@ func (b *Builder) handlePosts(publicAssets map[string]string) ([]*postData, erro
 			"content":         post.Content,
 			"path":            post.Path,
 			"url":             post.URL,
+			"prevPost":        prevPost,
+			"nextPost":        nextPost,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("error writing post: %w", err)
