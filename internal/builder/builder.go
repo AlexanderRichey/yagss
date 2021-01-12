@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	gohtml "html"
 	"io"
 	"io/ioutil"
 	"log"
@@ -17,6 +18,7 @@ import (
 
 	chromahtml "github.com/alecthomas/chroma/formatters/html"
 	"github.com/flosch/pongo2/v4"
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting"
 	meta "github.com/yuin/goldmark-meta"
@@ -292,6 +294,9 @@ func (b *Builder) handlePosts(publicAssets map[string]string) ([]*postData, erro
 	}
 
 	for i, post := range postList {
+		b.counter++
+		b.log.Printf("==> Processing %q", post.localSrcPath)
+
 		var (
 			prevPost *postData
 			nextPost *postData
@@ -309,9 +314,9 @@ func (b *Builder) handlePosts(publicAssets map[string]string) ([]*postData, erro
 		}
 
 		b.writeTpl(tpl, post.localOutPath, pongo2.Context{
-			"siteURL":         b.config.SiteURL,
 			"pageTitle":       fmt.Sprintf("%s | %s", b.config.SiteTitle, post.Title),
 			"pageDescription": post.Description,
+			"siteURL":         b.config.SiteURL,
 			"assets":          publicAssets,
 			"title":           post.Title,
 			"date":            post.Date,
@@ -514,13 +519,13 @@ func (b *Builder) handlePostsIdx(path string, postList []*postData, publicAssets
 }
 
 func (b *Builder) handleRSS(postList []*postData) error {
-	if len(postList) == 0 {
+	if !b.config.RSS || len(postList) == 0 {
 		return nil
 	}
 
 	var posts []*postData
-	if len(postList) >= 3 {
-		posts = postList[:3]
+	if len(postList) >= b.config.PostsPerPage {
+		posts = postList[:b.config.PostsPerPage]
 	} else {
 		posts = postList
 	}
@@ -533,10 +538,20 @@ func (b *Builder) handleRSS(postList []*postData) error {
 		return fmt.Errorf("could not compile rss template: %w", err)
 	}
 
+	p := bluemonday.StrictPolicy()
+
 	for i := range posts {
-		split := strings.Split(posts[i].Content, "</p>")
-		if len(split) > 0 {
-			posts[i].Content = strings.ReplaceAll(split[0], "\n", " ")
+		if posts[i].Description != b.config.SiteDescription {
+			posts[i].Content = posts[i].Description
+		} else if len(posts[i].Content) > 0 {
+			// Take the first paragraph
+			clean := strings.TrimSpace(p.Sanitize(posts[i].Content))
+			split := strings.Split(clean, "\n")
+			if len(split) > 0 {
+				posts[i].Content = gohtml.UnescapeString(split[0])
+			} else {
+				posts[i].Content = clean
+			}
 		} else {
 			posts[i].Content = "Nothing here."
 		}
@@ -574,9 +589,6 @@ func (b *Builder) gatherPosts(publicAssets map[string]string) ([]*postData, erro
 		if info.IsDir() {
 			return nil
 		}
-
-		b.counter++
-		b.log.Printf("==> Processing %q", path)
 
 		// Determine the output path
 		split := strings.Split(path, string(os.PathSeparator))

@@ -65,7 +65,7 @@ func Start(c *builder.Config, port int) error {
 }
 
 func serve(c *builder.Config, port int, doneC, closeC chan bool) {
-	ll := log.New(os.Stderr, "[server] ", 0)
+	ll := log.New(os.Stderr, "[server]  ", 0)
 
 	srv := http.Server{
 		Handler: handlers.CustomLoggingHandler(
@@ -123,8 +123,7 @@ func watch(c *builder.Config, b *builder.Builder, doneC, closeC chan bool) {
 					return
 				}
 
-				if event.Op&fsnotify.Write == fsnotify.Write ||
-					event.Op&fsnotify.Rename == fsnotify.Rename {
+				if event.Op&fsnotify.Rename == fsnotify.Rename {
 					ll.Printf("%q has been modified", event.Name)
 
 					if err := b.Build(); err != nil {
