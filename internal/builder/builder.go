@@ -36,8 +36,8 @@ var (
 )
 
 const (
-	_ReadWriteExecute = 0777
-	_ReadWrite        = 0666
+	readWriteExecute = 0777
+	readWrite        = 0666
 )
 
 type Builder struct {
@@ -129,9 +129,8 @@ func New(c *Config, l *log.Logger) (*Builder, error) {
 func (b *Builder) Build() error {
 	t0 := time.Now()
 
-	// Verify that posts, pages, public, and templates dirs exist
+	// Verify that pages, public, and templates dirs exist
 	for _, dir := range []string{
-		b.config.PostsDir,
 		b.config.PagesDir,
 		b.config.PublicDir,
 		b.config.TemplatesDir,
@@ -153,7 +152,7 @@ func (b *Builder) Build() error {
 	}
 
 	// Create the output dir
-	err = os.MkdirAll(b.config.OutputDir, os.FileMode(_ReadWriteExecute))
+	err = os.MkdirAll(b.config.OutputDir, os.FileMode(readWriteExecute))
 	if err != nil {
 		return fmt.Errorf("could not create output dir: %w", err)
 	}
@@ -287,7 +286,7 @@ func (b *Builder) handlePosts(publicAssets map[string]string) ([]*postData, erro
 	if len(postList) > 0 {
 		err := os.MkdirAll(
 			filepath.Join(b.config.OutputDir, b.config.PostsDir),
-			os.FileMode(_ReadWriteExecute))
+			os.FileMode(readWriteExecute))
 		if err != nil {
 			return nil, fmt.Errorf("could not create posts dir: %w", err)
 		}
@@ -375,6 +374,61 @@ func (b *Builder) handlePages(publicAssets map[string]string, postList []*postDa
 	})
 }
 
+func (b *Builder) handleRSS(postList []*postData) error {
+	if !b.config.RSS || len(postList) == 0 {
+		return nil
+	}
+
+	var posts []*postData
+	if len(postList) >= b.config.PostsPerPage {
+		posts = postList[:b.config.PostsPerPage]
+	} else {
+		posts = postList
+	}
+
+	b.counter++
+	b.log.Printf("==> Processing %q", "rss.xml")
+
+	tpl, err := b.templates.FromString(rssT)
+	if err != nil {
+		return fmt.Errorf("could not compile rss template: %w", err)
+	}
+
+	p := bluemonday.StrictPolicy()
+
+	for i := range posts {
+		if posts[i].Description != b.config.SiteDescription {
+			posts[i].Content = posts[i].Description
+		} else if len(posts[i].Content) > 0 {
+			// Take the first paragraph
+			clean := strings.TrimSpace(p.Sanitize(posts[i].Content))
+			split := strings.Split(clean, "\n")
+			if len(split) > 0 {
+				posts[i].Content = gohtml.UnescapeString(split[0])
+			} else {
+				posts[i].Content = clean
+			}
+		} else {
+			posts[i].Content = "Nothing here."
+		}
+	}
+
+	outP := filepath.Join(b.config.OutputDir, "rss.xml")
+
+	b.writeTpl(tpl, outP, pongo2.Context{
+		"title":       b.config.SiteTitle,
+		"url":         b.config.SiteURL,
+		"description": b.config.SiteDescription,
+		"date":        postList[0].Date,
+		"posts":       posts,
+	})
+	if err != nil {
+		return fmt.Errorf("error writing rss %q: %w", outP, err)
+	}
+
+	return nil
+}
+
 func (b *Builder) handleMDPage(path string, publicAssets map[string]string) error {
 	// Determine the output path
 	split := strings.Split(path, string(os.PathSeparator))
@@ -386,26 +440,15 @@ func (b *Builder) handleMDPage(path string, publicAssets map[string]string) erro
 
 	mdS, frontMatter, err := b.renderMD(path, publicAssets)
 	if err != nil {
-		return fmt.Errorf("could not read page %q: %w", path, err)
+		return fmt.Errorf("error rendering markdown: %w", err)
 	}
 
 	tpl, err := b.resolveTplFromFM(b.config.DefaultPageTemplate, frontMatter)
 	if err != nil {
-		return fmt.Errorf("handle markdown page: %w", err)
+		return fmt.Errorf("could not get page template for %q: %w", path, err)
 	}
 
-	// Optional metadata
-	desc := b.config.SiteDescription
-	if dat, ok := frontMatter["description"]; ok {
-		desc = dat
-	}
-
-	title := ""
-	pageTitle := b.config.SiteTitle
-	if dat, ok := frontMatter["title"]; ok {
-		title = dat
-		pageTitle = fmt.Sprintf("%s | %s", b.config.SiteTitle, dat)
-	}
+	pageTitle, title, desc := b.getPageMeta(frontMatter)
 
 	err = b.writeTpl(tpl, outP, pongo2.Context{
 		"pageTitle":       pageTitle,
@@ -416,7 +459,7 @@ func (b *Builder) handleMDPage(path string, publicAssets map[string]string) erro
 		"content":         mdS,
 	})
 	if err != nil {
-		return fmt.Errorf("handle markdown page: %w", err)
+		return fmt.Errorf("error writing markdown page %q: %w", outP, err)
 	}
 
 	return nil
@@ -445,7 +488,7 @@ func (b *Builder) handleHTMLPage(path string, publicAssets map[string]string) er
 		"assets":          publicAssets,
 	})
 	if err != nil {
-		return fmt.Errorf("could not render page %q: %w", outP, err)
+		return fmt.Errorf("error writing html page %q: %w", outP, err)
 	}
 
 	return nil
@@ -511,63 +554,8 @@ func (b *Builder) handlePostsIdx(path string, postList []*postData, publicAssets
 			"prev":            prev,
 		})
 		if err != nil {
-			return fmt.Errorf("could not render page %q: %w", outP, err)
+			return fmt.Errorf("error writing index page %q: %w", outP, err)
 		}
-	}
-
-	return nil
-}
-
-func (b *Builder) handleRSS(postList []*postData) error {
-	if !b.config.RSS || len(postList) == 0 {
-		return nil
-	}
-
-	var posts []*postData
-	if len(postList) >= b.config.PostsPerPage {
-		posts = postList[:b.config.PostsPerPage]
-	} else {
-		posts = postList
-	}
-
-	b.counter++
-	b.log.Printf("==> Processing %q", "rss.xml")
-
-	tpl, err := b.templates.FromString(rssT)
-	if err != nil {
-		return fmt.Errorf("could not compile rss template: %w", err)
-	}
-
-	p := bluemonday.StrictPolicy()
-
-	for i := range posts {
-		if posts[i].Description != b.config.SiteDescription {
-			posts[i].Content = posts[i].Description
-		} else if len(posts[i].Content) > 0 {
-			// Take the first paragraph
-			clean := strings.TrimSpace(p.Sanitize(posts[i].Content))
-			split := strings.Split(clean, "\n")
-			if len(split) > 0 {
-				posts[i].Content = gohtml.UnescapeString(split[0])
-			} else {
-				posts[i].Content = clean
-			}
-		} else {
-			posts[i].Content = "Nothing here."
-		}
-	}
-
-	outP := filepath.Join(b.config.OutputDir, "rss.xml")
-
-	b.writeTpl(tpl, outP, pongo2.Context{
-		"title":       b.config.SiteTitle,
-		"url":         b.config.SiteURL,
-		"description": b.config.SiteDescription,
-		"date":        postList[0].Date,
-		"posts":       posts,
-	})
-	if err != nil {
-		return fmt.Errorf("could not render rss %q: %w", outP, err)
 	}
 
 	return nil
@@ -583,6 +571,11 @@ func (b *Builder) gatherPosts(publicAssets map[string]string) ([]*postData, erro
 
 	err := filepath.Walk(b.config.PostsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			if path == b.config.PostsDir && os.IsNotExist(err) {
+				// PostsDir does not exist, so skip posts.
+				return nil
+			}
+
 			return err
 		}
 
@@ -635,31 +628,10 @@ func (b *Builder) gatherPosts(publicAssets map[string]string) ([]*postData, erro
 	return postList, nil
 }
 
-func (b *Builder) getPostMeta(frontMatter map[string]string) (title, desc string, date time.Time, err error) {
-	// Check for required fields
-	for _, key := range []string{"title", "date"} {
-		if _, ok := frontMatter[key]; !ok {
-			return "", "", date, fmt.Errorf("%w: %q", errRequriedFieldNotFound, key)
-		}
-	}
-
-	pubDate, err := time.Parse("2006-01-02", frontMatter["date"])
-	if err != nil {
-		return "", "", date, fmt.Errorf("could not parse date %q: %w", frontMatter["date"], err)
-	}
-
-	// Optional description metadata
-	if _, ok := frontMatter["description"]; !ok {
-		frontMatter["description"] = b.config.SiteDescription
-	}
-
-	return frontMatter["title"], frontMatter["description"], pubDate, nil
-}
-
 func (b *Builder) renderMD(path string, publicAssets map[string]string) (string, map[string]string, error) {
 	fb, err := ioutil.ReadFile(path)
 	if err != nil {
-		return "", nil, fmt.Errorf("could not read post %q: %w", path, err)
+		return "", nil, fmt.Errorf("could not read markdown file %q: %w", path, err)
 	}
 
 	buf := new(bytes.Buffer)
@@ -736,12 +708,49 @@ func (b *Builder) mkOutDir(path string) error {
 	split[0] = b.config.OutputDir
 	dirP := filepath.Join(split...)
 
-	err := os.MkdirAll(dirP, os.FileMode(_ReadWriteExecute))
+	err := os.MkdirAll(dirP, os.FileMode(readWriteExecute))
 	if err != nil {
 		return fmt.Errorf("could not create directory %q: %w", dirP, err)
 	}
 
 	return nil
+}
+
+func (b *Builder) getPostMeta(frontMatter map[string]string) (title, desc string, date time.Time, err error) {
+	// Check for required fields
+	for _, key := range []string{"title", "date"} {
+		if _, ok := frontMatter[key]; !ok {
+			return "", "", date, fmt.Errorf("%w: %q", errRequriedFieldNotFound, key)
+		}
+	}
+
+	pubDate, err := time.Parse("2006-01-02", frontMatter["date"])
+	if err != nil {
+		return "", "", date, fmt.Errorf("could not parse date %q: %w", frontMatter["date"], err)
+	}
+
+	// Optional description metadata
+	if _, ok := frontMatter["description"]; !ok {
+		frontMatter["description"] = b.config.SiteDescription
+	}
+
+	return frontMatter["title"], frontMatter["description"], pubDate, nil
+}
+
+func (b *Builder) getPageMeta(frontMatter map[string]string) (pageTitle, title, desc string) {
+	desc = b.config.SiteDescription
+	if dat, ok := frontMatter["description"]; ok {
+		desc = dat
+	}
+
+	title = ""
+	pageTitle = b.config.SiteTitle
+	if dat, ok := frontMatter["title"]; ok {
+		title = dat
+		pageTitle = fmt.Sprintf("%s | %s", b.config.SiteTitle, dat)
+	}
+
+	return pageTitle, title, desc
 }
 
 func msi2mss(msi map[string]interface{}) (map[string]string, error) {
