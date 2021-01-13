@@ -23,17 +23,17 @@ type config struct {
 	Directories struct {
 		Includes string `human:"directories.includes"`
 		Pages    string `human:"directories.pages"`
-		Posts    string `human:"directories.posts"`
+		Posts    string `human:"directories.posts" optional:""`
 		Public   string `human:"directories.public"`
 		Output   string `human:"directories.output"`
 	}
 	Defaults struct {
 		PageTemplate string `human:"defaults.pageTemplate"`
-		PostTemplate string `human:"defaults.postTemplate"`
+		PostTemplate string `human:"defaults.postTemplate" optional:""`
 	}
 	Build struct {
-		PostsIndexPage    string   `human:"build.postsIndexPage"`
-		PostsPerPage      int      `human:"build.postsPerPage"`
+		PostsIndexPage    string   `human:"build.postsIndexPage" optional:""`
+		PostsPerPage      int      `human:"build.postsPerPage" optional:""`
 		ChromaTheme       string   `human:"build.chromaTheme"`
 		ChromaLineNumbers bool     `human:"build.chromaLineNumbers"`
 		RSS               bool     `human:"build.rss"`
@@ -79,23 +79,54 @@ func ReadConfig() (*Config, error) {
 	}, nil
 }
 
-func check(c interface{}) error {
+func check(c *config) error {
+	// If the posts dir is defined, then the three other fields below most also be defined.
+	if c.Directories.Posts != "" {
+		if c.Defaults.PostTemplate == "" {
+			return fmt.Errorf("%w: %q", errRequiredFieldNotFound, "defaults.postTemplate")
+		}
+
+		if c.Build.PostsIndexPage == "" {
+			return fmt.Errorf("%w: %q", errRequiredFieldNotFound, "build.postsIndexPage")
+		}
+
+		if c.Build.PostsPerPage <= 0 {
+			return fmt.Errorf("%w: %q", errGreaterThan, "build.postsPerPage")
+		}
+	} else {
+		c.Defaults.PostTemplate = ""
+		c.Build.PostsIndexPage = ""
+		c.Build.PostsPerPage = 0
+	}
+
+	return checkrec(c)
+}
+
+func checkrec(c interface{}) error {
 	cv := reflect.Indirect(reflect.ValueOf(c))
 	vt := cv.Type()
 
 	for i := 0; i < cv.NumField(); i++ {
 		switch cv.Field(i).Kind() {
 		case reflect.Struct:
-			err := check(cv.Field(i).Interface())
+			err := checkrec(cv.Field(i).Interface())
 			if err != nil {
 				return err
 			}
 		case reflect.String:
 			if len(cv.Field(i).String()) == 0 {
+				if _, found := vt.Field(i).Tag.Lookup("optional"); found {
+					continue
+				}
+
 				return fmt.Errorf("%w: %q", errRequiredFieldNotFound, vt.Field(i).Tag.Get("human"))
 			}
 		case reflect.Int:
-			if cv.Field(i).Int() <= 0 {
+			if val := cv.Field(i).Int(); val <= 0 {
+				if _, found := vt.Field(i).Tag.Lookup("optional"); found && val == 0 {
+					continue
+				}
+
 				return fmt.Errorf("%w: %q", errGreaterThan, vt.Field(i).Tag.Get("human"))
 			}
 		default:

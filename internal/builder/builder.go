@@ -216,21 +216,6 @@ func (b *Builder) handlePublic() (map[string]string, error) {
 		}
 		defer fp.Close()
 
-		// Generate the hash
-		_, err = io.Copy(hash, fp)
-		if err != nil {
-			return fmt.Errorf("could not hash file %q: %w", path, err)
-		}
-
-		hashS := hex.EncodeToString(hash.Sum(nil)[:16])
-		hash.Reset()
-
-		// Reset the file reader so that it can be used again below
-		_, err = fp.Seek(0, 0)
-		if err != nil {
-			return fmt.Errorf("could not reset file reader %q: %w", path, err)
-		}
-
 		// Determine the output filepath
 		split := strings.Split(path, string(os.PathSeparator))
 		split[0] = b.config.OutputDir
@@ -240,6 +225,21 @@ func (b *Builder) handlePublic() (map[string]string, error) {
 		ext := filepath.Ext(path)
 		for _, cmp := range b.config.HashExts {
 			if ext == cmp {
+				// Generate the hash
+				_, err = io.Copy(hash, fp)
+				if err != nil {
+					return fmt.Errorf("could not hash file %q: %w", path, err)
+				}
+
+				hashS := hex.EncodeToString(hash.Sum(nil)[:16])
+				hash.Reset()
+
+				// Reset the file reader so that it can be used again below
+				_, err = fp.Seek(0, 0)
+				if err != nil {
+					return fmt.Errorf("could not reset file reader %q: %w", path, err)
+				}
+
 				fsplit := strings.Split(info.Name(), ".")
 				fsplit = append(fsplit[:len(fsplit)-1], hashS[:8], fsplit[len(fsplit)-1])
 				split[len(split)-1] = strings.Join(fsplit, ".")
@@ -771,6 +771,10 @@ func msi2mss(msi map[string]interface{}) (map[string]string, error) {
 func getPlist(psize int, postList []*postData) [][]*postData {
 	postPgs := make([][]*postData, 0)
 	idx := -1
+
+	if psize <= 0 {
+		return postPgs
+	}
 
 	for i, p := range postList {
 		if i%psize == 0 {
