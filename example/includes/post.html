@@ -3,4 +3,7 @@
   <h2>{{ title }}</h2>
   <time datetime="{{ date }}">{{ date|date:"2 Jan 2006" }}</time>
   {{ content|safe }}
+  {% if prevPost %}
+  <aside><a href="{{ prevPost.Path }}">Previous Post: {{ prevPost.Title }}</a></aside>
+  {% endif %}
 {% endblock %}

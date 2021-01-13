@@ -1,8 +1,18 @@
 # 🐐 yagss
 
-`yagss` is short for *yet another generator of static sites*. `yagss` supports blogs and non-blogs. It uses [Jinja](https://jinja.palletsprojects.com/en/2.11.x/) style templates via [pongo2](https://github.com/flosch/pongo2), supports markdown (with codeblock syntax highlighting), RSS feed generation, cache-busting of static assets, and minifies output by default. Unlike [Jekyll](https://jekyllrb.com/) and [Hugo](https://gohugo.io/), there are no themes–just HTML templates and CSS, which you fully control.
+`yagss` is short for *yet another generator of static sites*. `yagss` supports blogs and non-blogs. It uses [Jinja](https://jinja.palletsprojects.com/en/2.11.x/) style templates via [pongo2](https://github.com/flosch/pongo2), supports markdown (with code syntax highlighting from [Chroma](https://github.com/alecthomas/chroma)), RSS feed generation, cache-busting of static assets, and minifies output by default. Unlike [Jekyll](https://jekyllrb.com/) and [Hugo](https://gohugo.io/), there are no themes–just HTML templates and CSS, which you fully control.
 
-`yagss` is intended help make simple websites where all you really need is some HTML, CSS, and maybe a bit of JavaScript. See the quickstart and documentation below for more information.
+`yagss` is intended help make small, simple websites where all you really need is some HTML, CSS, and maybe a bit of JavaScript. It's not intended to replace more robust tools such as Hugo. See the quickstart and documentation below for more information.
+
+## Install
+
+Right now, the best way to install is to build from source. You'll need `go` and `make` for this to work.
+
+```bash
+git clone git@github.com:AlexanderRichey/yagss.git
+cd yagss
+make install
+```
 
 ## Usage
 
@@ -65,7 +75,7 @@ I recommend checking out the files, changing things, and seeing what happens.
 
 Here's the `yagss` directory structure and some information about each directory's role.
 
-```
+```bash
 $ tree
 .
 ├── build
@@ -87,14 +97,16 @@ $ tree
 ├── public
 │   # Files and sub-directories in this directory are moved to the root of  
 │   # the output directory. Files that end with .html, .css, .js, .jsx,
-│   # .svg, .xml, or .json are automatically minified.
+│   # .svg, .xml, or .json are automatically minified. If a file ends in a
+│   # extension specified in the build.hash array, then a hash will
+│   # be included in the outputted file's name.
 │   ├── favicon.ico
 │   └── styles.css
 └── includes
     # The includes directory contains templates and partials. Unlike
     # pages, they are not compiled on their own. In other words,
     # if a "includes/index.html" file exists, but no file in "pages"
-    # refers to it, then it will not be included in the site's built
+    # refers to it, then it will not be included in the site's
     # output. In contrast, "pages/index.html" will be included.
     ├── base.html
     ├── page.html
@@ -125,7 +137,7 @@ Processed 9 files in 15.806605ms
 
 Let's look at the generated files. Note that they are minified and that CSS assets contain hashes in their names. This makes cache-busting the default behavior. By default, hashes are added to `.js` and `.css` files. This can be changed by editing the `build.hash` setting in `config.toml`.
 
-```
+```bash
 $ tree build
 build/
 ├── about.html
@@ -154,7 +166,9 @@ $ cat includes/base.html | grep assets
 
 ### Pages
 
-Pages must be placed in the `directories.pages` directory and can be nested. The directory tree is preserved when building. Posts can be in markdown or HTML format and can use template directives. If pages are in markdown format, the `defaults.pageTemplate` is used to render the page. This can be overridden by specifying a `template` key in the markdown front-matter whose value is a path to a template in the `directories.includes` directory. Here's an example.
+Pages must be placed in the `directories.pages` directory and can be nested. The directory tree is preserved in the output. Posts can be in markdown or HTML format and can use template directives. Moreover, number of parameters [described below](#template-parameters-for-pages) are passed to page templates.
+
+If pages are in markdown format, the `defaults.pageTemplate` is used to render the page. This can be overridden by specifying a `template` key in page's markdown front-matter whose value is a path to a template in the `directories.includes` directory. Here's an example.
 
 ```
 ---
@@ -167,7 +181,7 @@ I am me--or am I?
 
 And here's an example template:
 
-```
+```html
 {% extends 'base.html' %}
 {% block content %}
   <img src="{{ assets|key:'images/me.jpg' }}" alt="special image in this template">
@@ -178,20 +192,9 @@ And here's an example template:
 
 Note that `content`, which is the rendered markdown content, uses the `safe` filter. This is important because otherwise the rendered markdown would be escaped.
 
-##### Template Parameters for Pages
-
-| Field | Type | Comment |
-| ----- | ---- | ------- |
-| pageTitle | String | The title of the page intended for use in the `<title>` tag. |
-| pageDescription | String | The description of the page intended for use in the description `<meta>` tag. |
-| siteURL | String | The base URL of the site. |
-| assets | Map | A map of source-paths to output-paths for all files in the `directories.public` directory. |
-| content | String | Optional. Rendered markdown from markdown file. |
-| title | String | Optional. Passed from markdown file. |
-
 ### Blogging
 
-Blog posts must be placed in the `posts` directory (This can be changed by editing the `directories.posts` setting). Each post must be a markdown file with front-matter that specifies a title and date. For example:
+Blog posts must be placed in the `directories.posts` directory (This can be changed in `config.toml`). Each post must be a markdown file with front-matter that specifies a *title* and *date*, where any date's format is `YYYY-MM-DD`. For example:
 
 ```
 ---
@@ -206,9 +209,9 @@ Hello world.
 
 Note that the `assets` object is made available to posts as well.
 
-Blog posts are rendered using the `defaults.postTemplate` file. A destructured post object is passed to this template. Here's an example of a `defaults.postTemplate` that renders the given fields. Note that `content` uses the `safe` filter. This is important because otherwise the rendered markdown would be escaped.
+Blog posts are rendered using the `defaults.postTemplate` file. A destructured [post object](#post-object) and [other fields](#template-parameters-for-posts) are passed to this template. Here's an example of a `defaults.postTemplate` that renders the given fields. Note that `content` uses the `safe` filter. As already mentioned, this is important because otherwise the rendered markdown would be escaped.
 
-```
+```html
 {% extends 'base.html' %}
 {% block content %}
   <h2>{{ title }}</h2>
@@ -217,23 +220,13 @@ Blog posts are rendered using the `defaults.postTemplate` file. A destructured p
 {% endblock %}
 ```
 
-##### Post Object
-
-| Field | Type | Comment |
-| ----- | ---- | ------- |
-| Title | String | Required. |
-| Description | String | Optional. |
-| Date | time.Time | Required. |
-| Content | String | Required. The rendered markdown. |
-| Path | String | Required. The relative URL of the post. |
-| URL | String | Required. The absolute URL of the post. |
-
-
 #### Posts Index
 
-The `build.postsIndex` template file is used to generate a paginated list of all blog posts. A `posts` object is passed to this template that contains all of the posts for that page. `next` and `prev` strings are also passed to the `build.postsIndex` template in order to support pagination. Page size is determined by the `defaults.postsPerPage` setting. Here's an example posts index template:
+The `build.postsIndex` template file is used to generate a paginated list of all blog posts. A `posts` object is passed to this template that contains all of the posts for the given page. `next` and `prev` strings are also passed to the `build.postsIndex` template in order to support pagination. Page size is determined by the `defaults.postsPerPage` setting. See below for a [complete list of parameters](#template-parameters-for-post-index) passed to the posts index template.
 
-```
+Here's an example template:
+
+```html
 {% extends 'base.html' %}
 {% block content %}
   <!-- Iterate through all posts -->
@@ -261,6 +254,51 @@ The `build.postsIndex` template file is used to generate a paginated list of all
 {% endblock %}
 ```
 
+#### RSS
+
+By default, an RSS feed is generated that uses the most recent `build.postsPerPage` posts. If `build.postsPerPage` is three, for example, then the most recent three posts will be included in the resulting `rss.xml`. This can be disabled by making the `build.rss` setting `false` in `config.toml`.
+
+### Types & Template Parameters
+
+##### Post Object
+
+| Field | Type | Comment |
+| ----- | ---- | ------- |
+| Title | String | Required. Passed from markdown front-matter.|
+| Description | String | Optional. Passed from markdown front-matter.|
+| Date | time.Time | Required. Passed from markdown front-matter.|
+| Content | String | Required. The rendered markdown. |
+| Path | String | Required. The relative URL of the post. |
+| URL | String | Required. The absolute URL of the post. |
+
+##### Template Parameters for Pages
+
+| Field | Type | Comment |
+| ----- | ---- | ------- |
+| pageTitle | String | The title of the page intended for use in the `<title>` tag. |
+| pageDescription | String | The description of the page intended for use in the description `<meta>` tag. |
+| siteURL | String | The base URL of the site. |
+| assets | Map | A map of source-paths to output-paths for all files in the `directories.public` directory. |
+| content | String | Optional. Rendered markdown from markdown file. |
+| title | String | Optional. Passed from markdown front-matter. |
+
+##### Template Parameters for Posts
+
+| Field | Type | Comment |
+| ----- | ---- | ------- |
+| pageTitle | String | The title of the page intended for use in the `<title>` tag. |
+| pageDescription | String | The description of the page intended for use in the description `<meta>` tag. |
+| siteURL | String | The base URL of the site. |
+| assets | Map | A map of source-paths to output-paths for all files in the `directories.public` directory. |
+| content | String | Optional. Rendered markdown from markdown file. |
+| title | String | Required. Passed from markdown front-matter. |
+| description | String | Optional. Passed from markdown front-matter. |
+| date | time.Time | Required. Passed from markdown front-matter. |
+| path | String | Required. The relative URL of the post. |
+| URL | String | Required. The absolute URL of the post. |
+| prevPost | Post | Optional. The next post ordered by the date field. |
+| nextPost | Post | Optional. The previous post ordered by the date field. |
+
 ##### Template Parameters for Post Index
 
 | Field | Type | Comment |
@@ -269,11 +307,6 @@ The `build.postsIndex` template file is used to generate a paginated list of all
 | pageDescription | String | The description of the page intended for use in the description `<meta>` tag. |
 | siteURL | String | The base URL of the site. |
 | assets | Map | A map of source-paths to output-paths for all files in the `directories.public` directory. |
-| posts | []Post | An array of post objects. |
-| next | String | Optional. Link to the next page of posts. |
-| prev | String | Optional. Link to the previous page of posts. |
-
-#### RSS
-
-By default, an RSS feed is generated that uses the most recent `build.postsPerPage` posts. If `build.postsPerPage` is three, then the most recent three posts will be included in the resulting `rss.xml`. This can be disabled by making the `build.rss` setting `false` in `config.toml`.
-
+| posts | []Post | An array of Post objects. |
+| next | String | Optional. Relative URL of the next page of posts. |
+| prev | String | Optional. Relative URL of the previous page of posts. |

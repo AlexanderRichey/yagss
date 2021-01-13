@@ -11,15 +11,15 @@
   url = "http://localhost:3000"
 
 [directories]
-  # The templates directory contains templates and partials. Unlike
-  # pages, they are not compiled on their own. In other words,
-  # if a "templates/index.html" file exists, but not file in "pages"
+  # The includes directory contains templates and partials. Unlike
+  # pages, they are not compiled on their own. For example,
+  # if a "includes/index.html" file exists, but not file in "pages"
   # refers to it, then it will not be included in the site's built
   # output. In contrast, "pages/index.html" will be included.
   includes = "includes"
   # The pages directory contains pages that can be in markdown or
   # html format. Pages can also use template directives and they
-  # are compiled to the site's output.
+  # are compiled to the site's output directory.
   pages = "pages"
   # The posts directory contains markdown blog posts. Its usage is
   # optional.
@@ -33,10 +33,10 @@
 
 [defaults]
   # This template is used to process any markdown file in the pages
-  # directory. It should be located in the templates directory.
+  # directory. It should be located in the includes directory.
   pageTemplate = "page.html"
   # This template is used to process any markdown file in the posts
-  # directory. It should be located in the templates directory.
+  # directory. It should be located in the includes directory.
   postTemplate = "post.html"
 
 [build]
@@ -46,12 +46,13 @@
   postsIndexPage = "index.html"
   postsPerPage = 3 
   # The following two directives control the behavior of chroma, which
-  # is used for syntax highlighting in markdown files.
+  # is used for syntax highlighting in markdown files. For a list of
+  # chroma themes, visit: https://xyproto.github.io/splash/docs/
   chromaTheme = "friendly"
   chromaLineNumbers = false
   # When true, an rss.xml file is built containing information from the 
   # available posts.
   rss = true
   # Files whose extensions are in the following array include an md5 hash
-  # in their name when they are compiled. This enables cache-busting.
+  # in their names when outputted. This supports cache-busting.
   hash = [".js", ".css"]
