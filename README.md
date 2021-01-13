@@ -6,12 +6,15 @@
 
 ## Install
 
-Right now, the best way to install is to build from source. You'll need `go` and `make` for this to work.
+See the [**releases**](https://github.com/AlexanderRichey/yagss/releases) page to download pre-compiled binaries for Linux and Mac.
+
+To build from source, run these commands (you'll need `go` and `make` for this to work):
 
 ```bash
 git clone git@github.com:AlexanderRichey/yagss.git
 cd yagss
 make install
+yagss version
 ```
 
 ## Usage
