@@ -1,0 +1,6 @@
+language: go
+go:
+  - 1.15
+script:
+  - go test -coverprofile=cover.out -coverpkg=./... ./...
+  - bash <(curl -s https://codecov.io/bash)
