@@ -24,3 +24,7 @@ gen:
 clean:
 	rm -rf build/*
 	rm -rf internal/proj/data
+
+.PHONY: test
+test:
+	go test -v -cover ./...
