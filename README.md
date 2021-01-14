@@ -1,5 +1,7 @@
 # 🐐 yagss
 
+[![Build Status](https://travis-ci.com/AlexanderRichey/yagss.svg?branch=main)](https://travis-ci.com/AlexanderRichey/yagss) [![codecov](https://codecov.io/gh/AlexanderRichey/yagss/branch/main/graph/badge.svg?token=OOCNDW7I7I)](https://codecov.io/gh/AlexanderRichey/yagss)
+
 `yagss` is short for *yet another generator of static sites*. `yagss` supports blogs and non-blogs. It uses [Jinja](https://jinja.palletsprojects.com/en/2.11.x/) style templates via [pongo2](https://github.com/flosch/pongo2), supports markdown (with code syntax highlighting from [Chroma](https://github.com/alecthomas/chroma)), RSS feed generation, cache-busting of static assets, and minifies output by default. Unlike [Jekyll](https://jekyllrb.com/) and [Hugo](https://gohugo.io/), there are no themes–just HTML templates and CSS, which you fully control.
 
 `yagss` is intended help make small, simple websites where all you really need is some HTML, CSS, and maybe a bit of JavaScript. It's not intended to replace more robust tools such as Hugo. See the quickstart and documentation below for more information.
