@@ -62,6 +62,7 @@ type Config struct {
 	DefaultPageTemplate string
 	ChromaTheme         string
 	ChromaLineNumbers   bool
+	ChromaWithClasses   bool
 	PostsIndex          string
 	PostsPerPage        int
 	RSS                 bool
@@ -117,7 +118,9 @@ func New(c *Config, l *log.Logger) (*Builder, error) {
 	builder.markdown = goldmark.New(
 		goldmark.WithExtensions(meta.Meta, highlighting.NewHighlighting(
 			highlighting.WithStyle(c.ChromaTheme),
-			highlighting.WithFormatOptions(chromahtml.WithLineNumbers(c.ChromaLineNumbers)))),
+			highlighting.WithFormatOptions(
+				chromahtml.WithLineNumbers(c.ChromaLineNumbers),
+				chromahtml.WithClasses(c.ChromaWithClasses)))),
 		goldmark.WithRendererOptions(html.WithUnsafe()))
 
 	// Init mini

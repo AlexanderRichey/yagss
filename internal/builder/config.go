@@ -34,8 +34,9 @@ type config struct {
 	Build struct {
 		PostsIndexPage    string   `human:"build.postsIndexPage" optional:""`
 		PostsPerPage      int      `human:"build.postsPerPage" optional:""`
-		ChromaTheme       string   `human:"build.chromaTheme"`
+		ChromaTheme       string   `human:"build.chromaTheme" optional:""`
 		ChromaLineNumbers bool     `human:"build.chromaLineNumbers"`
+		ChromaWithClasses bool     `human:"build.chromaWithClasses"`
 		RSS               bool     `human:"build.rss"`
 		Hash              []string `human:"build.hash"`
 	}
@@ -72,6 +73,7 @@ func ReadConfig() (*Config, error) {
 		DefaultPageTemplate: c.Defaults.PageTemplate,
 		ChromaTheme:         c.Build.ChromaTheme,
 		ChromaLineNumbers:   c.Build.ChromaLineNumbers,
+		ChromaWithClasses:   c.Build.ChromaWithClasses,
 		PostsIndex:          c.Build.PostsIndexPage,
 		PostsPerPage:        c.Build.PostsPerPage,
 		RSS:                 c.Build.RSS,
