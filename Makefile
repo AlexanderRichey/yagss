@@ -10,11 +10,19 @@ local: gen
 install:
 	@cd cmd/yagss && go install -ldflags "${LINKER_FLAGS}"
 
-compile-linux:
+compile-all: compile-linux-amd64 compile-linux-arm compile-darwin-amd64 compile-darwin-arm
+
+compile-linux-amd64:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "${LINKER_FLAGS} ${RELEASE_BUILD_LINKER_FLAGS}" -o build/bin/yagss-linux-amd64 ./cmd/yagss
 
-compile-darwin:
+compile-linux-arm:
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -ldflags "${LINKER_FLAGS} ${RELEASE_BUILD_LINKER_FLAGS}" -o build/bin/yagss-linux-arm ./cmd/yagss
+
+compile-darwin-amd64:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "${LINKER_FLAGS} ${RELEASE_BUILD_LINKER_FLAGS}" -o build/bin/yagss-darwin-amd64 ./cmd/yagss
+
+compile-darwin-arm:
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "${LINKER_FLAGS} ${RELEASE_BUILD_LINKER_FLAGS}" -o build/bin/yagss-darwin-arm ./cmd/yagss
 
 .PHONY: gen
 gen:
